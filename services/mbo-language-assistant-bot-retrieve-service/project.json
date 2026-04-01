@@ -1,0 +1,17 @@
+{
+  "name": "retrieve-service",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "root": "services/mbo-language-assistant-bot-retrieve-service",
+  "sourceRoot": "services/mbo-language-assistant-bot-retrieve-service",
+  "projectType": "application",
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "services/mbo-language-assistant-bot-retrieve-service",
+        "command": "npx cross-env PYTHONIOENCODING=utf-8 PYTHONUTF8=1 python retrieve_service.py"
+      }
+    }
+  },
+  "tags": ["scope:backend", "service:retrieve"]
+}

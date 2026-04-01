@@ -1,0 +1,21 @@
+{
+  "name": "testing",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "nx": "nx",
+    "dev-all": "nx run workspace:dev-all",
+    "stop-all": "nx run workspace:stop-all",
+    "graph": "nx graph",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "cross-env": "^10.1.0",
+    "nx": "^22.6.3"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "api-gateway",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "root": "services/mbo-language-assistant-bot-api-gateway",
+  "sourceRoot": "services/mbo-language-assistant-bot-api-gateway",
+  "projectType": "application",
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "services/mbo-language-assistant-bot-api-gateway",
+        "command": "npx cross-env PYTHONIOENCODING=utf-8 PYTHONUTF8=1 python api_gateway.py"
+      }
+    }
+  },
+  "tags": ["scope:backend", "service:gateway"]
+}
