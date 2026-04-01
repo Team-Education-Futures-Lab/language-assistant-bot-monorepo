@@ -19,7 +19,6 @@ from websocket import WebSocketConnectionClosedException, WebSocketTimeoutExcept
 
 SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(SERVICE_DIR, '.env'))
-load_dotenv(os.path.join(SERVICE_DIR, '.env.example'), override=False)
 
 # Initialize Flask appW
 app = Flask(__name__)

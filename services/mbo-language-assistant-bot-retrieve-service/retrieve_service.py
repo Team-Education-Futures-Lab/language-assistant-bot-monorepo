@@ -19,7 +19,6 @@ SERVICES_DIR = os.path.dirname(SERVICE_DIR)
 
 # Load env files from service-local first, then shared services-level files.
 load_dotenv(os.path.join(SERVICE_DIR, '.env'))
-load_dotenv(os.path.join(SERVICE_DIR, '.env.example'), override=False)
 load_dotenv(os.path.join(SERVICES_DIR, '.env'), override=False)
 
 # --- PART 1: DATABASE CONNECTION DETAILS ---
