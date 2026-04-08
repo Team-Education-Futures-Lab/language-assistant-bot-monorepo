@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, FileUp, Search, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  API_BASE_URL,
+  createChunk as apiCreateChunk,
+  deleteChunk as apiDeleteChunk,
+  deleteUpload as apiDeleteUpload,
+  fetchChunks as apiFetchChunks,
+  uploadSubjectFile as apiUploadSubjectFile,
+} from '../api';
 
 const ChunkManager = ({ subjectId, onChunksUpdated }) => {
   const [chunks, setChunks] = useState([]);
@@ -25,14 +33,11 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
   const [sortBy, setSortBy] = useState('newest');
   const itemsPerPage = 5; // Fixed items per page for chunks within uploads
 
-  const API_URL = 'http://localhost:5004';
-
   const fetchChunks = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/subjects/${subjectId}/chunks`);
-      const data = await response.json();
-      setChunks(data.chunks || []);
+      const nextChunks = await apiFetchChunks(subjectId, API_BASE_URL);
+      setChunks(nextChunks);
     } catch (err) {
       setError('Error fetching chunks');
     } finally {
@@ -60,18 +65,10 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/subjects/${subjectId}/chunks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content: formData.content,
-          source_file: formData.source_file || 'Untitled'
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Error adding chunk');
-      }
+      await apiCreateChunk(subjectId, {
+        content: formData.content,
+        source_file: formData.source_file || 'Untitled'
+      }, API_BASE_URL);
 
       setFormData({ content: '', source_file: '' });
       setShowForm(false);
@@ -90,14 +87,7 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
     }
 
     try {
-      const response = await fetch(`${API_URL}/chunks/${chunkId}`, {
-        method: 'DELETE'
-      });
-
-      if (!response.ok) {
-        throw new Error('Error deleting chunk');
-      }
-
+      await apiDeleteChunk(chunkId, API_BASE_URL);
       await fetchChunks();
       onChunksUpdated?.();
     } catch (err) {
@@ -114,21 +104,7 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
     setDeletingUpload(uploadName);
 
     try {
-      const response = await fetch(
-        `${API_URL}/subjects/${subjectId}/uploads/${encodeURIComponent(uploadName)}`,
-        { method: 'DELETE' }
-      );
-
-      if (!response.ok) {
-        let errorMessage = 'Error deleting upload';
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.message || errorMessage;
-        } catch {
-          // Keep default error message when backend response is not JSON
-        }
-        throw new Error(errorMessage);
-      }
+      await apiDeleteUpload(subjectId, uploadName, API_BASE_URL);
 
       setExpandedUploads((prev) => {
         const next = { ...prev };
@@ -268,48 +244,20 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
     setLoading(true);
 
     try {
-      const formDataObj = new FormData();
-      formDataObj.append('file', uploadFile);
-      formDataObj.append('chunk_size', chunkSize);
+      await apiUploadSubjectFile(
+        subjectId,
+        uploadFile,
+        chunkSize,
+        API_BASE_URL,
+        setUploadProgress
+      );
 
-      const xhr = new XMLHttpRequest();
-      
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const progress = Math.round((e.loaded / e.total) * 100);
-          setUploadProgress(progress);
-        }
-      };
-
-      xhr.onload = async () => {
-        const isSuccess = xhr.status >= 200 && xhr.status < 300;
-        let response = {};
-        try {
-          response = xhr.responseText ? JSON.parse(xhr.responseText) : {};
-        } catch {
-          response = {};
-        }
-
-        if (isSuccess) {
-          setUploadFile(null);
-          setUploadProgress(0);
-          setChunkSize(500);
-          setShowFileUpload(false);
-          await fetchChunks();
-          onChunksUpdated?.();
-        } else {
-          setError(response.message || response.error || 'Fout bij uploaden van bestand');
-        }
-        setLoading(false);
-      };
-
-      xhr.onerror = () => {
-        setError('Fout bij uploaden van bestand. Controleer of de backend service actief is.');
-        setLoading(false);
-      };
-
-      xhr.open('POST', `${API_URL}/subjects/${subjectId}/upload`);
-      xhr.send(formDataObj);
+      setUploadFile(null);
+      setUploadProgress(0);
+      setChunkSize(500);
+      setShowFileUpload(false);
+      await fetchChunks();
+      onChunksUpdated?.();
     } catch (err) {
       setError(err.message);
       setLoading(false);

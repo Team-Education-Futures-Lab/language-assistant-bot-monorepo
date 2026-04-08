@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Save, X, Trash2 } from 'lucide-react';
+import {
+  API_BASE_URL,
+  createSubject as apiCreateSubject,
+  deleteSubject as apiDeleteSubject,
+  updateSubject as apiUpdateSubject,
+} from '../api';
 
 const normalizeSubjectFormData = (inputSubject) => {
   if (!inputSubject) {
@@ -28,8 +34,6 @@ const SubjectForm = ({ subject, onSubmit, onCancel, onDelete }) => {
     setError('');
   }, [subject]);
 
-  const API_URL = 'http://localhost:5004';
-
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -41,32 +45,20 @@ const SubjectForm = ({ subject, onSubmit, onCancel, onDelete }) => {
     setLoading(true);
 
     try {
-      const url = subject
-        ? `${API_URL}/subjects/${subject.id}`
-        : `${API_URL}/subjects`;
-      
-      const method = subject ? 'PUT' : 'POST';
-
       const parsedRetrieval = parseInt(formData.retrieval_k, 10);
       const retrievalValue = Number.isNaN(parsedRetrieval) ? 10 : parsedRetrieval;
 
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name,
-          description: formData.description,
-          retrieval_k: retrievalValue
-        })
-      });
+      const payload = {
+        name: formData.name,
+        description: formData.description,
+        retrieval_k: retrievalValue
+      };
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Error saving subject');
-      }
+      const nextSubject = subject
+        ? await apiUpdateSubject(subject.id, payload, API_BASE_URL)
+        : await apiCreateSubject(payload, API_BASE_URL);
 
-      const data = await response.json();
-      onSubmit(data.subject);
+      onSubmit(nextSubject);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -81,14 +73,7 @@ const SubjectForm = ({ subject, onSubmit, onCancel, onDelete }) => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/subjects/${subject.id}`, {
-        method: 'DELETE'
-      });
-
-      if (!response.ok) {
-        throw new Error('Error deleting subject');
-      }
-
+      await apiDeleteSubject(subject.id, API_BASE_URL);
       onDelete(subject.id);
     } catch (err) {
       setError(err.message);

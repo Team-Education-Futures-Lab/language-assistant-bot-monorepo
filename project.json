@@ -12,15 +12,14 @@
           "nx run mbo-dashboard-frontend:serve",
           "nx run api-gateway:serve",
           "nx run database-manager:serve",
-          "nx run realtime-voice-service:serve",
-          "nx run retrieve-service:serve"
+          "nx run realtime-voice-service:serve"
         ]
       }
     },
     "stop-all": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ports = @(3000,3001,5000,5003,5004,5005); foreach ($port in $ports) { $processIds = Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; foreach ($processId in $processIds) { Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue } }; Write-Host 'Stopped processes on configured dev ports (if any were running).'\""
+        "command": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ports = @(3000,3001,5000,5004,5005); foreach ($port in $ports) { $processIds = Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; foreach ($processId in $processIds) { Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue } }; Write-Host 'Stopped processes on configured dev ports (if any were running).'\""
       }
     }
   }

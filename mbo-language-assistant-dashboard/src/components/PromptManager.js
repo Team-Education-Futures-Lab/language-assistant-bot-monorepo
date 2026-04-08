@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Check, X, AlertCircle, ChevronDown, ChevronRight, Search } from 'lucide-react';
+import {
+  API_BASE_URL,
+  createPrompt as apiCreatePrompt,
+  deletePrompt as apiDeletePrompt,
+  fetchPrompts as apiFetchPrompts,
+  updatePrompt as apiUpdatePrompt,
+} from '../api';
 
 const PromptManager = ({ onPromptsUpdated }) => {
   const [prompts, setPrompts] = useState([]);
@@ -12,8 +19,6 @@ const PromptManager = ({ onPromptsUpdated }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [formData, setFormData] = useState({ title: '', content: '', is_active: true, is_default: false });
 
-  const API_URL = 'http://localhost:5004';
-
   useEffect(() => {
     fetchPrompts();
   }, []);
@@ -22,15 +27,8 @@ const PromptManager = ({ onPromptsUpdated }) => {
     setLoading(true);
     setError(null);
     try {
-      // Use global prompts endpoint (no subject filtering)
-      const response = await fetch(`${API_URL}/prompts`);
-      const data = await response.json();
-      
-      if (data.status === 'success') {
-        setPrompts(data.prompts || []);
-      } else {
-        setError(data.message || 'Fout bij ophalen prompts');
-      }
+      const nextPrompts = await apiFetchPrompts(API_BASE_URL);
+      setPrompts(nextPrompts);
     } catch (err) {
       setError('Kan prompts niet ophalen. Is de service beschikbaar?');
       console.error('Error fetching prompts:', err);
@@ -46,26 +44,14 @@ const PromptManager = ({ onPromptsUpdated }) => {
     }
 
     try {
-      // Use global prompts endpoint
-      const response = await fetch(`${API_URL}/prompts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-
-      const data = await response.json();
-
-      if (data.status === 'success') {
-        await fetchPrompts();
-        setFormData({ title: '', content: '', is_active: true, is_default: false });
-        setShowAddForm(false);
-        setCurrentPage(1); // Reset to first page
-        if (onPromptsUpdated) onPromptsUpdated();
-      } else {
-        setError(data.message || 'Fout bij aanmaken prompt');
-      }
+      await apiCreatePrompt(formData, API_BASE_URL);
+      await fetchPrompts();
+      setFormData({ title: '', content: '', is_active: true, is_default: false });
+      setShowAddForm(false);
+      setCurrentPage(1); // Reset to first page
+      if (onPromptsUpdated) onPromptsUpdated();
     } catch (err) {
-      setError('Kan prompt niet aanmaken');
+      setError(err.message || 'Kan prompt niet aanmaken');
       console.error('Error creating prompt:', err);
     }
   };
@@ -73,25 +59,10 @@ const PromptManager = ({ onPromptsUpdated }) => {
   const handleUpdate = async (promptId, updates) => {
     try {
       console.log('Updating prompt:', promptId, updates);
-      const response = await fetch(`${API_URL}/prompts/${promptId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
-      });
-
-      console.log('Update response status:', response.status);
-      const data = await response.json();
-      console.log('Update response data:', data);
-
-      if (data.status === 'success') {
-        await fetchPrompts();
-        setEditingId(null);
-        if (onPromptsUpdated) onPromptsUpdated();
-      } else {
-        const errorMsg = data.message || 'Fout bij bijwerken prompt';
-        console.error('API error:', errorMsg);
-        setError(errorMsg);
-      }
+      await apiUpdatePrompt(promptId, updates, API_BASE_URL);
+      await fetchPrompts();
+      setEditingId(null);
+      if (onPromptsUpdated) onPromptsUpdated();
     } catch (err) {
       const errorMsg = `Kan prompt niet bijwerken: ${err.message}`;
       console.error('Error updating prompt:', err);
@@ -110,18 +81,9 @@ const PromptManager = ({ onPromptsUpdated }) => {
     }
 
     try {
-      const response = await fetch(`${API_URL}/prompts/${promptId}`, {
-        method: 'DELETE'
-      });
-
-      const data = await response.json();
-
-      if (data.status === 'success') {
-        await fetchPrompts();
-        if (onPromptsUpdated) onPromptsUpdated();
-      } else {
-        setError(data.message || 'Fout bij verwijderen prompt');
-      }
+      await apiDeletePrompt(promptId, API_BASE_URL);
+      await fetchPrompts();
+      if (onPromptsUpdated) onPromptsUpdated();
     } catch (err) {
       setError('Kan prompt niet verwijderen');
       console.error('Error deleting prompt:', err);

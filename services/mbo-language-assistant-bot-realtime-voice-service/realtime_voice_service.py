@@ -114,8 +114,8 @@ OPENAI_REALTIME_VAD_SILENCE_MS = int(os.getenv('OPENAI_REALTIME_VAD_SILENCE_MS',
 OPENAI_REALTIME_PREFIX_PADDING_MS = int(os.getenv('OPENAI_REALTIME_PREFIX_PADDING_MS', 300))
 
 DATABASE_MANAGER_URL = os.getenv('DATABASE_MANAGER_URL', 'http://localhost:5004')
-RETRIEVE_TOP_K = int(os.getenv('RETRIEVE_TOP_K', 5))
-RETRIEVE_TIMEOUT_SEC = float(os.getenv('RETRIEVE_TIMEOUT_SEC', 4))
+DEFAULT_RETRIEVE_TOP_K = 5
+DEFAULT_RETRIEVE_TIMEOUT_SEC = 4.0
 OPENAI_WS_TIMEOUT_SEC = float(os.getenv('OPENAI_WS_TIMEOUT_SEC', 180))
 OPENAI_WS_PING_INTERVAL_SEC = float(os.getenv('OPENAI_WS_PING_INTERVAL_SEC', 0))
 
@@ -156,6 +156,28 @@ def get_effective_system_prompt() -> str:
     if database_prompts:
         return database_prompts
     return OPENAI_REALTIME_SYSTEM_PROMPT or ''
+
+
+def get_runtime_setting(key: str, default_value, value_type=str):
+    """Read runtime settings from database-manager with safe defaults."""
+    try:
+        response = requests.get(f'{DATABASE_MANAGER_URL}/settings/{key}', timeout=3)
+        if response.status_code != 200:
+            return default_value
+
+        payload = response.json()
+        setting = payload.get('setting', {})
+        raw_value = setting.get('value', default_value)
+
+        if value_type == int:
+            return int(raw_value)
+        if value_type == float:
+            return float(raw_value)
+        if value_type == bool:
+            return str(raw_value).strip().lower() in ('1', 'true', 'yes', 'on')
+        return str(raw_value)
+    except Exception:
+        return default_value
 
 
 app = Flask(__name__)
@@ -306,10 +328,13 @@ def retrieve_external_context(user_query: str) -> dict:
         return {'context_found': False, 'formatted_context': '', 'sources': [], 'chunk_count': 0}
 
     try:
-        log.info('[RETRIEVE] Calling database manager (k=%s) for query=%r', RETRIEVE_TOP_K, user_query)
+        retrieve_top_k = get_runtime_setting('retrieve_top_k', DEFAULT_RETRIEVE_TOP_K, int)
+        retrieve_timeout_sec = get_runtime_setting('retrieve_timeout_sec', DEFAULT_RETRIEVE_TIMEOUT_SEC, float)
+
+        log.info('[RETRIEVE] Calling database manager (k=%s) for query=%r', retrieve_top_k, user_query)
         subjects_response = requests.get(
             f'{DATABASE_MANAGER_URL}/subjects',
-            timeout=RETRIEVE_TIMEOUT_SEC,
+            timeout=retrieve_timeout_sec,
         )
         if subjects_response.status_code != 200:
             log.warning('[RETRIEVE] Non-200 response from database manager /subjects: %s', subjects_response.status_code)
@@ -326,7 +351,7 @@ def retrieve_external_context(user_query: str) -> dict:
 
             chunks_response = requests.get(
                 f'{DATABASE_MANAGER_URL}/subjects/{subject_id}/chunks',
-                timeout=RETRIEVE_TIMEOUT_SEC,
+                timeout=retrieve_timeout_sec,
             )
             if chunks_response.status_code != 200:
                 log.warning(
@@ -339,7 +364,7 @@ def retrieve_external_context(user_query: str) -> dict:
             chunks_payload = chunks_response.json()
             all_chunks.extend(chunks_payload.get('chunks', []) or [])
 
-        ranked_chunks = rank_chunk_records(user_query, all_chunks, RETRIEVE_TOP_K)
+        ranked_chunks = rank_chunk_records(user_query, all_chunks, retrieve_top_k)
         if not ranked_chunks:
             log.info('[RETRIEVE] No matching chunks found in database manager')
             return {'context_found': False, 'formatted_context': '', 'sources': [], 'chunk_count': 0}

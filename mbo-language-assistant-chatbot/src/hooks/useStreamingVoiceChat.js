@@ -462,10 +462,10 @@ export default function useStreamingVoiceChat(callbacks = {}) {
       if (typeof window !== 'undefined') {
         const browserProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
         const browserHost = window.location.hostname || 'localhost';
-        candidates.push(`${browserProtocol}://${browserHost}:5000/ws/realtime-voice`);
+        candidates.push(`${browserProtocol}://${browserHost}:5000/api/query/ws/realtime-voice`);
       }
 
-      candidates.push('ws://localhost:5000/ws/realtime-voice');
+      candidates.push('ws://localhost:5000/api/query/ws/realtime-voice');
 
       // De-duplicate while keeping order.
       return [...new Set(candidates)];

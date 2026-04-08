@@ -7,6 +7,8 @@ Uses Supabase REST API (works on Eduroam/network-restricted connections)
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from supabase import create_client, Client
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_postgres import PGVector
 from pypdf import PdfReader
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
@@ -28,6 +30,18 @@ SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 SUBJECT_SETTINGS_TABLE = os.getenv('SUBJECT_SETTINGS_TABLE', 'settings')
 OPENAI_SETTINGS_TABLE = os.getenv('OPENAI_SETTINGS_TABLE', 'openai_settings')
+
+# --- Vector Retrieval Configuration ---
+DB_USER = os.getenv('DB_USER', "user")
+DB_PASSWORD = os.getenv('DB_PASSWORD', "password")
+DB_HOST = os.getenv('DB_HOST', "localhost")
+DB_PORT = os.getenv('DB_PORT', "5432")
+DB_NAME = os.getenv('DB_NAME', "school-db")
+COLLECTION_NAME = os.getenv('COLLECTION_NAME', "course_materials_vectors")
+CONNECTION_STRING = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+DEFAULT_RETRIEVE_TOP_K = int(os.getenv('DEFAULT_RETRIEVE_TOP_K', 10))
+DEFAULT_RETRIEVE_TIMEOUT_SEC = float(os.getenv('DEFAULT_RETRIEVE_TIMEOUT_SEC', 8))
 
 # Upload configuration - use absolute path
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -53,6 +67,8 @@ log = logging.getLogger('database_manager')
 # Initialize Supabase client
 supabase: Client = None
 db_connected = False
+vector_db = None
+vector_db_connected = False
 
 def init_supabase():
     """Initialize Supabase client"""
@@ -65,6 +81,26 @@ def init_supabase():
     except Exception as e:
         print(f"✗ Error initializing Supabase: {str(e)}")
         db_connected = False
+        return False
+
+
+def init_vector_db():
+    """Initialize PGVector connection for semantic retrieval."""
+    global vector_db, vector_db_connected
+    try:
+        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        vector_db = PGVector.from_existing_index(
+            embedding=embeddings,
+            collection_name=COLLECTION_NAME,
+            connection=CONNECTION_STRING,
+        )
+        vector_db_connected = True
+        print("✓ Vector database connected successfully")
+        return True
+    except Exception as e:
+        print(f"✗ Error connecting to vector database: {str(e)}")
+        vector_db = None
+        vector_db_connected = False
         return False
 
 # ============================================================================
@@ -148,8 +184,204 @@ def health():
     return jsonify({
         'status': 'healthy',
         'service': SERVICE_NAME,
-        'database': 'connected' if db_connected else 'disconnected'
+        'database': 'connected' if db_connected else 'disconnected',
+        'vector_database': 'connected' if vector_db_connected else 'disconnected'
     }), 200
+
+
+def get_runtime_setting_value(key, default_value, value_type=str):
+    """Read a runtime setting from the DB with env fallback."""
+    try:
+        data = supabase.table(OPENAI_SETTINGS_TABLE).select('value').eq('key', key).execute()
+        if not data.data:
+            return default_value
+
+        raw_value = data.data[0].get('value', default_value)
+        if value_type == int:
+            return int(raw_value)
+        if value_type == float:
+            return float(raw_value)
+        if value_type == bool:
+            return str(raw_value).strip().lower() in ('1', 'true', 'yes', 'on')
+        return str(raw_value)
+    except Exception:
+        return default_value
+
+
+def tokenize_text(text):
+    """Tokenize text into lowercase words for lexical fallback ranking."""
+    if not text:
+        return []
+    return [token for token in re.findall(r"\w+", text.lower()) if len(token) > 2]
+
+
+def rank_chunk_records(question, chunk_records, k):
+    """Simple lexical ranking fallback when vector retrieval is unavailable."""
+    query_tokens = set(tokenize_text(question))
+    if not query_tokens:
+        return chunk_records[:k]
+
+    scored = []
+    question_lower = question.lower()
+
+    for chunk in chunk_records:
+        content = (chunk.get('content') or '').lower()
+        if not content.strip():
+            continue
+
+        content_tokens = set(tokenize_text(content))
+        overlap = len(query_tokens.intersection(content_tokens))
+        phrase_bonus = 2 if question_lower in content else 0
+        score = overlap + phrase_bonus
+
+        if score > 0:
+            scored.append((score, chunk))
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return [chunk for _, chunk in scored[:k]]
+
+
+def format_docs_for_llm(docs):
+    """Format vector documents into one context block for LLM prompts."""
+    formatted_string = ""
+    for i, doc in enumerate(docs):
+        source_filename = os.path.basename(doc.metadata.get('source', 'Unknown Source'))
+        formatted_string += f"--- Context from {source_filename} (Chunk {i+1}) ---\n"
+        formatted_string += doc.page_content.strip() + "\n\n"
+    return formatted_string.strip()
+
+
+def format_chunk_records_for_llm(chunks):
+    """Format DB chunk records into one context block for LLM prompts."""
+    parts = []
+    for i, chunk in enumerate(chunks):
+        source_filename = os.path.basename(chunk.get('source_file') or 'Unknown Source')
+        parts.append(f"--- Context from {source_filename} (Chunk {i+1}) ---")
+        parts.append((chunk.get('content') or '').strip())
+        parts.append('')
+    return "\n".join(parts).strip()
+
+
+@app.route('/retrieve', methods=['POST'])
+def retrieve_context():
+    """Retrieve relevant context chunks for a user question."""
+    try:
+        data = request.get_json()
+
+        if not data or 'question' not in data:
+            return jsonify({
+                'status': 'error',
+                'message': 'Ontbrekend veld "question" in requestbody'
+            }), 400
+
+        user_query = str(data['question']).strip()
+        if not user_query:
+            return jsonify({
+                'status': 'error',
+                'message': 'Vraag kan niet leeg zijn'
+            }), 400
+
+        runtime_retrieve_top_k = get_runtime_setting_value('retrieve_top_k', DEFAULT_RETRIEVE_TOP_K, int)
+        requested_k = data.get('k', runtime_retrieve_top_k)
+        k = int(requested_k)
+        if k < 1:
+            k = 1
+        if k > 20:
+            k = 20
+
+        retrieval_mode = 'vector'
+
+        if vector_db_connected and vector_db is not None:
+            try:
+                results = vector_db.similarity_search(user_query, k=k)
+                if not results:
+                    return jsonify({
+                        'status': 'success',
+                        'question': user_query,
+                        'context_found': False,
+                        'formatted_context': '',
+                        'sources': [],
+                        'chunk_count': 0,
+                        'service': SERVICE_NAME,
+                        'mode': retrieval_mode
+                    }), 200
+
+                sources = []
+                for doc in results:
+                    source_filename = os.path.basename(doc.metadata.get('source', 'Unknown Source'))
+                    if source_filename not in sources:
+                        sources.append(source_filename)
+
+                formatted_context = format_docs_for_llm(results)
+                chunk_count = len(results)
+            except Exception:
+                retrieval_mode = 'fallback'
+                all_chunks_data = supabase.table('chunks').select('content,source_file').execute()
+                all_chunks = all_chunks_data.data or []
+                ranked_chunks = rank_chunk_records(user_query, all_chunks, k)
+
+                if not ranked_chunks:
+                    return jsonify({
+                        'status': 'success',
+                        'question': user_query,
+                        'context_found': False,
+                        'formatted_context': '',
+                        'sources': [],
+                        'chunk_count': 0,
+                        'service': SERVICE_NAME,
+                        'mode': retrieval_mode
+                    }), 200
+
+                sources = []
+                for chunk in ranked_chunks:
+                    source_filename = os.path.basename(chunk.get('source_file') or 'Unknown Source')
+                    if source_filename not in sources:
+                        sources.append(source_filename)
+
+                formatted_context = format_chunk_records_for_llm(ranked_chunks)
+                chunk_count = len(ranked_chunks)
+        else:
+            retrieval_mode = 'fallback'
+            all_chunks_data = supabase.table('chunks').select('content,source_file').execute()
+            all_chunks = all_chunks_data.data or []
+            ranked_chunks = rank_chunk_records(user_query, all_chunks, k)
+
+            if not ranked_chunks:
+                return jsonify({
+                    'status': 'success',
+                    'question': user_query,
+                    'context_found': False,
+                    'formatted_context': '',
+                    'sources': [],
+                    'chunk_count': 0,
+                    'service': SERVICE_NAME,
+                    'mode': retrieval_mode
+                }), 200
+
+            sources = []
+            for chunk in ranked_chunks:
+                source_filename = os.path.basename(chunk.get('source_file') or 'Unknown Source')
+                if source_filename not in sources:
+                    sources.append(source_filename)
+
+            formatted_context = format_chunk_records_for_llm(ranked_chunks)
+            chunk_count = len(ranked_chunks)
+
+        return jsonify({
+            'status': 'success',
+            'question': user_query,
+            'context_found': True,
+            'formatted_context': formatted_context,
+            'sources': sources,
+            'chunk_count': chunk_count,
+            'service': SERVICE_NAME,
+            'mode': retrieval_mode
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Een onverwachte fout is opgetreden: {str(e)}'
+        }), 500
 
 # ============================================================================
 # SUBJECT ENDPOINTS (CRUD)
@@ -1110,11 +1342,13 @@ if __name__ == '__main__':
     print(f"  - Get Setting:   GET    http://{SERVICE_HOST}:{SERVICE_PORT}/settings/<key>")
     print(f"  - Save Setting:  POST   http://{SERVICE_HOST}:{SERVICE_PORT}/settings")
     print(f"  - Delete Setting:DELETE http://{SERVICE_HOST}:{SERVICE_PORT}/settings/<key>")
+    print(f"  - Retrieve:      POST   http://{SERVICE_HOST}:{SERVICE_PORT}/retrieve")
     print(f"\n{SERVICE_NAME} is ready to receive requests...")
     print(f"{'='*70}\n")
     
     # Initialize Supabase
     if init_supabase():
+        init_vector_db()
         app.run(host=SERVICE_HOST, port=SERVICE_PORT, debug=False)
     else:
         print("✗ Failed to initialize Supabase. Check your credentials.")

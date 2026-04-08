@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Mic, MicOff, User, Bot, Trash2, Play, Pause } from 'lucide-react';
-import { queryBackendAPISpeech, synthesizeSpeechAudio } from '../api';
+import { API_BASE_URL, queryBackendAPISpeech, synthesizeSpeechAudio } from '../api';
 
 // --- TUNING CONSTANTS ---
 // If the Green bar never crosses the Red line, LOWER this number.
@@ -18,7 +18,7 @@ const VAD_MAX_ZCR = 0.22;
 const VAD_SPEECH_FRAMES_REQUIRED = 4;
 
 export default function SpeechPage() {
-  const SETTINGS_API_URL = 'http://localhost:5004';
+  const SETTINGS_API_URL = `${API_BASE_URL}/api/query`;
   const [recording, setRecording] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [response, setResponse] = useState('');

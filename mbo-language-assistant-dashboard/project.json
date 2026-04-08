@@ -9,7 +9,7 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "mbo-language-assistant-dashboard",
-        "command": "npx cross-env PORT=3001 BROWSER=none npm start"
+        "command": "npx cross-env PORT_FOR_DEVELOPMENT=3001 BROWSER=none npm start"
       }
     },
     "build": {

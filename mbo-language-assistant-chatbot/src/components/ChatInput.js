@@ -1,6 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { Send, Mic } from 'lucide-react';
 
+const SHOW_TYPING_INPUT = false;
+
 export default function ChatInput({
   onSend,
   disabled,
@@ -55,7 +57,7 @@ export default function ChatInput({
             placeholder="Typ je bericht..."
             rows={1}
             disabled={disabled || isRecording}
-            className="flex-1 border-none bg-transparent text-base leading-relaxed resize-none max-h-52 min-h-6 py-2 px-0 text-app-text-primary placeholder-gray-500 focus:outline-none focus-ring"
+            className={`${SHOW_TYPING_INPUT ? 'flex-1 border-none bg-transparent text-base leading-relaxed resize-none max-h-52 min-h-6 py-2 px-0 text-app-text-primary placeholder-gray-500 focus:outline-none focus-ring' : 'hidden'}`}
           />
           <button 
             type="button"
@@ -84,7 +86,7 @@ export default function ChatInput({
           <button 
             type="submit" 
             disabled={!input.trim() || disabled || isRecording || awaitingResponse}
-            className={`p-2 border-none rounded flex items-center justify-center transition-all duration-200 ripple ${input.trim() && !disabled && !isRecording ? 'bg-app-accent text-white cursor-pointer hover:bg-app-accent-hover' : 'bg-transparent text-gray-500 cursor-not-allowed'}`}
+            className={`${SHOW_TYPING_INPUT ? 'p-2 border-none rounded flex items-center justify-center transition-all duration-200 ripple' : 'hidden'} ${input.trim() && !disabled && !isRecording ? 'bg-app-accent text-white cursor-pointer hover:bg-app-accent-hover' : 'bg-transparent text-gray-500 cursor-not-allowed'}`}
           >
             <Send size={18} />
           </button>

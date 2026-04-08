@@ -3,6 +3,7 @@
   "namedInputs": {
     "default": [
       "{projectRoot}/**/*",
+      "!{workspaceRoot}/services/mbo-language-assistant-bot-retrieve-service/**",
       "sharedGlobals"
     ],
     "production": [

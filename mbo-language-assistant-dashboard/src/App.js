@@ -4,6 +4,12 @@ import SubjectForm from './components/SubjectForm';
 import ChunkManager from './components/ChunkManager';
 import SettingsPage from './components/SettingsPage';
 import { Menu, X, Settings } from 'lucide-react';
+import {
+  API_BASE_URL,
+  fetchApiHealth as apiFetchApiHealth,
+  fetchSubjects as apiFetchSubjects,
+  fetchSubjectById as apiFetchSubjectById,
+} from './api';
 
 function App() {
   const [subjects, setSubjects] = useState([]);
@@ -18,8 +24,6 @@ function App() {
   const [sidebarWidth, setSidebarWidth] = useState(256); // Default 256px (w-64)
   const [isResizing, setIsResizing] = useState(false);
 
-  const API_URL = 'http://localhost:5004';
-
   // Persist currentPage to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('dashboardPage', currentPage);
@@ -32,8 +36,8 @@ function App() {
 
   const checkApiHealth = async () => {
     try {
-      const response = await fetch(`${API_URL}/health`);
-      if (response.ok) {
+      const isHealthy = await apiFetchApiHealth(API_BASE_URL);
+      if (isHealthy) {
         setApiConnected(true);
         fetchSubjects();
       }
@@ -47,9 +51,8 @@ function App() {
   const fetchSubjects = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/subjects`);
-      const data = await response.json();
-      setSubjects(data.subjects || []);
+      const nextSubjects = await apiFetchSubjects(API_BASE_URL);
+      setSubjects(nextSubjects);
       setSelectedSubject(null);
     } catch (error) {
       console.error('Error fetching subjects:', error);
@@ -80,12 +83,11 @@ function App() {
     // Refresh the current subject's data without clearing selection
     if (selectedSubject) {
       try {
-        const response = await fetch(`${API_URL}/subjects/${selectedSubject.id}`);
-        const data = await response.json();
-        if (data.subject) {
-          setSelectedSubject(data.subject);
+        const subject = await apiFetchSubjectById(selectedSubject.id, API_BASE_URL);
+        if (subject) {
+          setSelectedSubject(subject);
           // Also update the subject in the list
-          setSubjects(subjects.map(s => s.id === selectedSubject.id ? data.subject : s));
+          setSubjects(subjects.map(s => s.id === selectedSubject.id ? subject : s));
         }
       } catch (error) {
         console.error('Error refreshing subject:', error);
@@ -272,7 +274,7 @@ function App() {
               </p>
             </div>
           ) : currentPage === 'settings' ? (
-            <SettingsPage apiUrl={API_URL} />
+            <SettingsPage apiUrl={API_BASE_URL} />
           ) : showForm ? (
             <SubjectForm
               onSubmit={handleSubjectCreated}

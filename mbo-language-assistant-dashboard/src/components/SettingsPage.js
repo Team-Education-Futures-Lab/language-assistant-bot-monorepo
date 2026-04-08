@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import PromptManager from './PromptManager';
+import { API_BASE_URL, fetchSettings as apiFetchSettings, saveSettings as apiSaveSettings } from '../api';
 
 const defaultSpeechSettings = {
   speech_whisper_model_size: 'small',
@@ -21,7 +22,7 @@ const defaultTextSettings = {
   text_ollama_num_ctx: '4096',
 };
 
-const defaultOpenAISettings = {
+const createDefaultOpenAISettings = (apiUrl) => ({
   openai_realtime_model: 'gpt-4o-mini-realtime-preview',
   openai_realtime_transcription_model: 'whisper-1',
   openai_realtime_barge_in_enabled: 'true',
@@ -35,19 +36,19 @@ const defaultOpenAISettings = {
   openai_realtime_prefix_padding_ms: '300',
   openai_ws_timeout_sec: '180',
   openai_ws_ping_interval_sec: '0',
-  database_manager_url: 'http://localhost:5004',
+  database_manager_url: apiUrl || API_BASE_URL || '',
   retrieve_top_k: '5',
   retrieve_timeout_sec: '4',
   openai_realtime_use_ephemeral_token: 'false',
   openai_realtime_ws_url: 'wss://api.openai.com/v1/realtime',
   openai_realtime_api_base: 'https://api.openai.com/v1',
-};
+});
 
 export default function SettingsPage({ apiUrl }) {
   const [selectedSection, setSelectedSection] = useState('openai');
   const [speechSettings, setSpeechSettings] = useState(defaultSpeechSettings);
   const [textSettings, setTextSettings] = useState(defaultTextSettings);
-  const [openaiSettings, setOpenAISettings] = useState(defaultOpenAISettings);
+  const [openaiSettings, setOpenAISettings] = useState(() => createDefaultOpenAISettings(apiUrl));
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -83,14 +84,9 @@ export default function SettingsPage({ apiUrl }) {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(`${apiUrl}/settings`);
-      const data = await response.json();
+      const settings = await apiFetchSettings(apiUrl || API_BASE_URL);
 
-      if (!response.ok || data.status !== 'success') {
-        throw new Error(data.message || 'Kon instellingen niet ophalen.');
-      }
-
-      const mapped = (data.settings || []).reduce((acc, row) => {
+      const mapped = settings.reduce((acc, row) => {
         acc[row.key] = String(row.value ?? '');
         return acc;
       }, {});
@@ -98,7 +94,7 @@ export default function SettingsPage({ apiUrl }) {
       // Separate speech, text, and openai settings to avoid conflicts
       const speechKeys = Object.keys(defaultSpeechSettings);
       const textKeys = Object.keys(defaultTextSettings);
-      const openaiKeys = Object.keys(defaultOpenAISettings);
+      const openaiKeys = Object.keys(createDefaultOpenAISettings(apiUrl));
       
       const speechMapped = {};
       const textMapped = {};
@@ -132,16 +128,6 @@ export default function SettingsPage({ apiUrl }) {
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
-
-  const handleSpeechChange = (key, value) => {
-    console.log(`[DASHBOARD] Speech setting changed: ${key} = ${value}`);
-    setSpeechSettings((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const handleTextChange = (key, value) => {
-    console.log(`[DASHBOARD] Text setting changed: ${key} = ${value}`);
-    setTextSettings((prev) => ({ ...prev, [key]: value }));
-  };
 
   const handleOpenAIChange = (key, value) => {
     console.log(`[DASHBOARD] OpenAI setting changed: ${key} = ${value}`);
@@ -184,34 +170,13 @@ export default function SettingsPage({ apiUrl }) {
     openai_realtime_api_base: 'Base URL voor OpenAI API calls.',
   };
 
-  const saveSettings = async () => {
+  const handleSaveSettings = async () => {
     setSaving(true);
     setError('');
     setSuccess('');
 
-    console.log('[DASHBOARD] === SAVING SETTINGS ===');
-    console.log('[DASHBOARD] All settings:', allSettings);
-
     try {
-      const entries = Object.entries(allSettings);
-
-      for (const [key, value] of entries) {
-        console.log(`[DASHBOARD] Sending: ${key} = ${value}`);
-        const response = await fetch(`${apiUrl}/settings`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            key,
-            value,
-            description: settingDescriptions[key] || '',
-          }),
-        });
-
-        const data = await response.json();
-        if (!response.ok || data.status !== 'success') {
-          throw new Error(data.message || `Opslaan mislukt voor ${key}`);
-        }
-      }
+      await apiSaveSettings(allSettings, settingDescriptions, apiUrl || API_BASE_URL);
 
       setSuccess('Instellingen succesvol opgeslagen.');
       await loadSettings();
@@ -442,7 +407,7 @@ export default function SettingsPage({ apiUrl }) {
       {selectedSection === 'openai' && (
         <div className="bg-white rounded-lg border border-gray-200 p-6 flex justify-end">
           <button
-            onClick={saveSettings}
+            onClick={handleSaveSettings}
             disabled={saving || loading}
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
           >

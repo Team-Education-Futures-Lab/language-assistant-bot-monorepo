@@ -22,8 +22,6 @@
 !/services/mbo-language-assistant-bot-database-manager/**
 !/services/mbo-language-assistant-bot-realtime-voice-service/
 !/services/mbo-language-assistant-bot-realtime-voice-service/**
-!/services/mbo-language-assistant-bot-retrieve-service/
-!/services/mbo-language-assistant-bot-retrieve-service/**
 
 # Explicitly ignore directories you requested to exclude
 /chat_app/
@@ -31,10 +29,12 @@
 /school_chatbot__test/
 /services/mbo-language-assistant-bot-speech-input-service/
 /services/mbo-language-assistant-bot-text-input-service/
+/services/mbo-language-assistant-bot-retrieve-service/
 
 # Secrets and local env files
 **/.env
-**/.env.*
+**/.env.local
+**/.env.*.local
 **/.envrc
 **/*.pem
 **/*.key
@@ -44,8 +44,8 @@
 **/*secret*.json
 **/*credentials*.json
 
-# One template currently contains a real key: do not track it
-/services/mbo-language-assistant-bot-realtime-voice-service/.env.example
+# Track .env.example files (templates with placeholder values)
+!**/.env.example
 
 # Python artifacts
 **/__pycache__/

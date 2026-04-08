@@ -1,7 +1,0 @@
-flask==2.3.3
-flask-cors==4.0.0
-requests==2.31.0
-langchain-huggingface==1.2.0
-langchain-postgres==0.0.17
-psycopg2-binary==2.9.9
-sentence-transformers==2.2.2
