@@ -1,0 +1,7 @@
+[Unit]
+Description=Yonder application (gateway + all backend services)
+After=network.target
+Wants=yonder-gateway.service
+
+[Install]
+WantedBy=multi-user.target

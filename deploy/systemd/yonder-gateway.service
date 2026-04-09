@@ -1,0 +1,19 @@
+[Unit]
+Description=Yonder API gateway
+After=network.target
+PartOf=yonder.target
+
+[Service]
+Type=simple
+User=yonder
+WorkingDirectory=/srv/yonder/current
+EnvironmentFile=/srv/yonder/current/deploy/env/gateway.env
+ExecStart=/srv/yonder/current/deploy/run-service.sh gateway
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=yonder-gateway
+
+[Install]
+WantedBy=yonder.target

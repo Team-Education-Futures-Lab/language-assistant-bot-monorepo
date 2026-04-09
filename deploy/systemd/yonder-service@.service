@@ -1,0 +1,19 @@
+[Unit]
+Description=Yonder backend service (%i)
+After=network.target
+PartOf=yonder.target
+
+[Service]
+Type=simple
+User=yonder
+WorkingDirectory=/srv/yonder/current
+EnvironmentFile=/srv/yonder/current/deploy/env/%i.env
+ExecStart=/srv/yonder/current/deploy/run-service.sh %i
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=yonder-%i
+
+[Install]
+WantedBy=yonder.target

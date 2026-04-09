@@ -9,6 +9,10 @@
 !/project.json
 !/README.md
 
+# Deployment scripts and systemd units
+!/deploy/
+!/deploy/**
+
 # Keep only intended tracked applications/services
 !/NT2-chatbot/
 !/NT2-chatbot/**
