@@ -27,6 +27,7 @@ deploy/env/*.env
 !/services/database-manager/**
 !/services/openai-service/
 !/services/openai-service/**
+!/deploy/**
 
 # Explicitly ignore directories you requested to exclude
 /chat_app/
