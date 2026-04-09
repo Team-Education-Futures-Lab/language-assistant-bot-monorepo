@@ -73,6 +73,62 @@ Core capabilities:
 - Use `mbo-language-assistant-chatbot/README.md` for frontend behavior and endpoint expectations.
 - Use `mbo-language-assistant-dashboard/README.md` for admin/dashboard capabilities.
 
+## Start Development With Nx (Step By Step)
+
+Run everything from the repository root (`testing`).
+
+1. Install root dependencies (Nx and workspace tooling).
+
+```bash
+npm install
+```
+
+2. Install frontend dependencies.
+
+```bash
+npm --prefix mbo-language-assistant-chatbot install
+npm --prefix mbo-language-assistant-dashboard install
+```
+
+3. Prepare Python services (first time only).
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r services/mbo-language-assistant-bot-api-gateway/requirements.txt
+pip install -r services/mbo-language-assistant-bot-database-manager/requirements.txt
+pip install -r services/mbo-language-assistant-bot-realtime-voice-service/requirements.txt
+```
+
+4. Start the full dev stack with Nx.
+
+```bash
+npm run dev-all
+```
+
+This starts:
+- chatbot frontend (`mbo-chatbot-frontend:serve`) on port 3000
+- dashboard frontend (`mbo-dashboard-frontend:serve`) on port 3001
+- api gateway (`api-gateway:serve`) on port 5000
+- database manager (`database-manager:serve`) on port 5004
+- realtime voice service (`realtime-voice-service:serve`) on port 5005
+
+5. Stop all dev services.
+
+```bash
+npm run stop-all
+```
+
+Optional: run a single project with Nx.
+
+```bash
+npx nx run mbo-chatbot-frontend:serve
+npx nx run mbo-dashboard-frontend:serve
+npx nx run api-gateway:serve
+npx nx run database-manager:serve
+npx nx run realtime-voice-service:serve
+```
+
 ## Repository Scope
 
 This monorepo intentionally tracks the chatbot, dashboard, selected backend services, and Nx root workspace files.
