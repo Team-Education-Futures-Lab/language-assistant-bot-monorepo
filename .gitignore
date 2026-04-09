@@ -12,6 +12,7 @@
 # Deployment scripts and systemd units
 !/deploy/
 !/deploy/**
+deploy/env/*.env
 
 # Keep only intended tracked applications/services
 !/NT2-chatbot/
