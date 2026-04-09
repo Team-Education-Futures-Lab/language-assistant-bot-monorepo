@@ -189,7 +189,7 @@ export default function SettingsPage({ apiUrl }) {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <div className="dashboard-card bg-white rounded-lg border border-gray-200 p-6">
         <h3 className="text-xl font-semibold text-gray-800">OpenAI Instellingen</h3>
         <p className="text-sm text-gray-600 mt-1">
           Configureer runtime-parameters voor de OpenAI Realtime API service.
@@ -215,7 +215,7 @@ export default function SettingsPage({ apiUrl }) {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <section className="lg:col-span-3 bg-white rounded-lg border border-gray-200 p-4">
+        <section className="dashboard-card lg:col-span-3 bg-white rounded-lg border border-gray-200 p-4">
           <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Configureerbaar</h4>
           <div className="space-y-2">
             <button
@@ -241,7 +241,7 @@ export default function SettingsPage({ apiUrl }) {
           </div>
         </section>
 
-        <section className="lg:col-span-9 bg-white rounded-lg border border-gray-200 p-6">
+        <section className="dashboard-card lg:col-span-9 bg-white rounded-lg border border-gray-200 p-6">
           <h4 className="text-lg font-semibold text-gray-800 mb-4">
             {selectedSection === 'openai' ? 'OpenAI instellingen' : 'System Prompts (Global)'}
           </h4>
@@ -405,11 +405,11 @@ export default function SettingsPage({ apiUrl }) {
       </div>
 
       {selectedSection === 'openai' && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6 flex justify-end">
+        <div className="dashboard-card bg-white rounded-lg border border-gray-200 p-6 flex justify-end">
           <button
             onClick={handleSaveSettings}
             disabled={saving || loading}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+            className="dashboard-primary-btn px-6 py-2 transition disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {saving ? 'Opslaan...' : 'Instellingen Opslaan'}
           </button>

@@ -3,7 +3,8 @@ import SubjectList from './components/SubjectList';
 import SubjectForm from './components/SubjectForm';
 import ChunkManager from './components/ChunkManager';
 import SettingsPage from './components/SettingsPage';
-import { Menu, X, Settings } from 'lucide-react';
+import { Menu, X, Settings, Loader2, PlusCircle, FolderPlus, BookOpenText } from 'lucide-react';
+import appLogo from './components/images/yonder_logo.png';
 import {
   API_BASE_URL,
   fetchApiHealth as apiFetchApiHealth,
@@ -124,7 +125,7 @@ function App() {
   }, [resize, stopResizing]);
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="dashboard-root flex h-screen">
       {/* Sidebar */}
       <div
         style={{ 
@@ -132,45 +133,53 @@ function App() {
           minWidth: sidebarOpen ? '200px' : '80px',
           maxWidth: sidebarOpen ? '600px' : '80px'
         }}
-        className="bg-white border-r border-gray-200 transition-all duration-300 flex flex-col relative"
+        className="dashboard-sidebar border-r transition-all duration-300 flex flex-col relative"
       >
         {/* Header */}
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
-            {sidebarOpen && (
-              <h1 
-                className="text-xl font-bold text-blue-600 cursor-pointer hover:text-blue-700 transition truncate"
+            {sidebarOpen ? (
+              <button
+                className="dashboard-home-btn flex items-center gap-2 border-none bg-transparent p-1 rounded-lg cursor-pointer hover:bg-white/10 transition"
                 onClick={() => {
                   setCurrentPage('subjects');
                   setSelectedSubject(null);
                   setShowForm(false);
                 }}
+                title="Home"
+                aria-label="Home"
               >
-                MBO Dashboard
-              </h1>
+                <img src={appLogo} alt="Yonder logo" className="w-7 h-7 object-contain" />
+                <span className="dashboard-brand text-base truncate">Dashboard</span>
+              </button>
+            ) : (
+              <button
+                className="group relative w-10 h-10 rounded-xl border-none bg-transparent p-0 cursor-pointer overflow-hidden transition-all duration-300 hover:shadow-sm hover:scale-[1.03]"
+                onClick={() => setSidebarOpen(true)}
+                title="Zijbalk openen"
+                aria-label="Zijbalk openen"
+              >
+                <img
+                  src={appLogo}
+                  alt="Yonder logo"
+                  className="absolute inset-0 w-full h-full object-contain p-1.5 transition-all duration-300 ease-out group-hover:opacity-0 group-hover:scale-90"
+                />
+                <span className="absolute inset-0 flex items-center justify-center text-app-text-secondary opacity-0 scale-90 transition-all duration-300 ease-out group-hover:opacity-100 group-hover:scale-100 group-hover:bg-gray-200">
+                  <Menu size={18} />
+                </span>
+              </button>
             )}
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition"
-            >
-              {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-            </button>
+            {sidebarOpen && (
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="dashboard-secondary-btn p-2 transition"
+                title="Zijbalk sluiten"
+                aria-label="Zijbalk sluiten"
+              >
+                <X size={20} />
+              </button>
+            )}
           </div>
-        </div>
-
-        {/* Status */}
-        <div className={`${sidebarOpen ? 'p-4' : 'p-2'} border-b border-gray-200`}>
-          {apiConnected ? (
-            <div className="flex items-center gap-2 text-green-600 text-sm">
-              <div className="w-2 h-2 bg-green-600 rounded-full"></div>
-              {sidebarOpen && <span>Verbonden</span>}
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 text-red-600 text-sm">
-              <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></div>
-              {sidebarOpen && <span>Niet verbonden</span>}
-            </div>
-          )}
         </div>
 
         {/* New Subject Button */}
@@ -180,9 +189,10 @@ function App() {
               setCurrentPage('subjects');
               setShowForm(true);
             }}
-            className={`w-full ${sidebarOpen ? 'px-4 py-2' : 'px-2 py-2'} bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium`}
+            className={`dashboard-primary-btn w-full ${sidebarOpen ? 'px-3 py-1.5' : 'px-2 py-1.5'} transition text-sm font-medium flex items-center ${sidebarOpen ? 'justify-start gap-2' : 'justify-center'}`}
           >
-            {sidebarOpen ? '+ Nieuw Onderwerp' : '+'}
+            <PlusCircle size={16} />
+            {sidebarOpen ? 'Nieuw Onderwerp' : ''}
           </button>
         </div>
 
@@ -197,24 +207,25 @@ function App() {
                     setCurrentPage('subjects');
                     setSelectedSubject(subject);
                   }}
-                  className={`w-full text-left ${sidebarOpen ? 'p-3' : 'p-2'} rounded-lg transition ${
+                  className={`w-full text-left ${sidebarOpen ? 'px-2.5 py-2' : 'p-2'} rounded-lg transition ${
                     selectedSubject?.id === subject.id
-                      ? 'bg-blue-100 text-blue-600 border border-blue-300'
-                      : 'hover:bg-gray-100 border border-transparent'
+                      ? 'bg-white/20 text-white border border-white/35'
+                      : 'hover:bg-white/10 border border-transparent text-slate-100'
                   }`}
                 >
                   {sidebarOpen ? (
-                    <>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <BookOpenText size={15} className="opacity-90 shrink-0" />
                       <p className="font-medium text-sm truncate" title={subject.name}>{subject.name}</p>
-                    </>
+                    </div>
                   ) : (
-                    <p className="text-xs font-medium truncate" title={subject.name}>{subject.name.substring(0, 2)}</p>
+                    <BookOpenText size={15} className="mx-auto opacity-90" />
                   )}
                 </button>
               ))}
             </div>
           ) : (
-            <div className={`${sidebarOpen ? 'p-4' : 'p-2'} text-center text-gray-500 text-sm`}>
+            <div className={`${sidebarOpen ? 'p-4 text-left' : 'p-2 text-center'} text-gray-500 text-sm`}>
               Geen onderwerpen
             </div>
           )}
@@ -228,10 +239,10 @@ function App() {
               setShowForm(false);
               setSelectedSubject(null);
             }}
-            className={`p-2 rounded-lg border transition ${
+            className={`rounded-lg border transition flex items-center ${sidebarOpen ? 'px-2.5 py-1.5 justify-center gap-1.5' : 'p-2 justify-center'} ${
               currentPage === 'settings'
-                ? 'bg-blue-100 text-blue-700 border-blue-300'
-                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                ? 'bg-white/20 text-white border-white/40'
+                : 'bg-white/5 text-slate-100 border-white/25 hover:bg-white/10'
             }`}
             title="Instellingen"
             aria-label="Instellingen"
@@ -253,9 +264,9 @@ function App() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="dashboard-main-panel flex-1 flex flex-col overflow-hidden">
         {/* Top Bar */}
-        <div className="bg-white border-b border-gray-200 p-6">
+        <div className="dashboard-topbar border-b border-gray-200 p-6">
           <h2 className="text-2xl font-bold text-gray-800 truncate" title={selectedSubject?.name}>
             {currentPage === 'settings' ? 'Instellingen' : (selectedSubject ? selectedSubject.name : 'Dashboard')}
           </h2>
@@ -267,11 +278,10 @@ function App() {
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-6">
           {!apiConnected ? (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-              <p className="text-yellow-800 font-medium">⚠️ Database Manager niet beschikbaar</p>
-              <p className="text-yellow-700 text-sm mt-2">
-                Zorg ervoor dat Docker services zijn gestart: <code className="bg-yellow-100 px-2 py-1 rounded">docker compose up --build</code>
-              </p>
+            <div className="dashboard-card rounded-lg p-6 flex flex-col items-start justify-center text-left gap-3 min-h-[180px]">
+              <Loader2 size={28} className="animate-spin text-blue-600" />
+              <p className="text-lg font-semibold text-gray-800">Database loading...</p>
+              <p className="text-sm text-gray-600">Even geduld, de verbinding wordt opgezet.</p>
             </div>
           ) : currentPage === 'settings' ? (
             <SettingsPage apiUrl={API_BASE_URL} />
@@ -293,12 +303,13 @@ function App() {
               />
             </div>
           ) : (
-            <div className="text-center text-gray-500 py-12">
+            <div className="text-left text-gray-500 py-12">
               <p className="text-lg">Selecteer een onderwerp of maak een nieuw</p>
               <button
                 onClick={() => setShowForm(true)}
-                className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                className="dashboard-primary-btn mt-4 px-4 py-1.5 transition inline-flex items-center gap-2"
               >
+                <FolderPlus size={16} />
                 Nieuw Onderwerp Maken
               </button>
             </div>

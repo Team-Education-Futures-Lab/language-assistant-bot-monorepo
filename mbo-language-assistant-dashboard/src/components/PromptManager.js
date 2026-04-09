@@ -101,7 +101,7 @@ const PromptManager = ({ onPromptsUpdated }) => {
   );
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden">
+    <div className="dashboard-card bg-white rounded-lg shadow-md overflow-hidden">
       {/* Header */}
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center justify-between">
@@ -113,7 +113,7 @@ const PromptManager = ({ onPromptsUpdated }) => {
           </div>
           <button
             onClick={() => setShowAddForm(!showAddForm)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2 text-sm"
+            className="dashboard-primary-btn px-4 py-2 transition flex items-center gap-2 text-sm"
           >
             <Plus size={16} />
             Nieuwe Prompt
@@ -194,7 +194,7 @@ const PromptManager = ({ onPromptsUpdated }) => {
             <div className="flex gap-2">
               <button
                 onClick={handleCreate}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2 text-sm"
+                className="dashboard-primary-btn px-4 py-2 transition flex items-center gap-2 text-sm"
               >
                 <Check size={16} />
                 Opslaan

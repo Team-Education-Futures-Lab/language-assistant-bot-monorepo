@@ -83,7 +83,7 @@ const SubjectForm = ({ subject, onSubmit, onCancel, onDelete }) => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="dashboard-card bg-white rounded-lg shadow-md p-6">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-lg font-semibold text-gray-800">
           {subject ? 'Onderwerp Bewerken' : 'Nieuw Onderwerp'}
@@ -155,7 +155,7 @@ const SubjectForm = ({ subject, onSubmit, onCancel, onDelete }) => {
           <button
             type="submit"
             disabled={loading}
-            className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+            className="dashboard-primary-btn flex items-center gap-2 px-6 py-2 transition disabled:opacity-50"
           >
             <Save size={18} />
             {loading ? 'Opslaan...' : 'Opslaan'}
@@ -177,7 +177,7 @@ const SubjectForm = ({ subject, onSubmit, onCancel, onDelete }) => {
             <button
               type="button"
               onClick={onCancel}
-              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+              className="dashboard-secondary-btn px-6 py-2 transition"
             >
               Annuleren
             </button>

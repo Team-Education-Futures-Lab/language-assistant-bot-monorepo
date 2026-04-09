@@ -457,6 +457,12 @@ function App() {
     setSidebarOpen(!sidebarOpen);
   };
 
+  const goToMainPage = () => {
+    setActivePage('chat');
+    setActiveConversationId(null);
+    setIsStartingNewConversation(false);
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-app-bg">
       <Sidebar
@@ -464,6 +470,7 @@ function App() {
         activeId={activeConversationId}
         currentPage={activePage}
         onSwitchPage={setActivePage}
+        onGoHome={goToMainPage}
         onNewChat={createNewChat}
         onSelectChat={handleSelectChat}
         onDeleteChat={deleteConversation}

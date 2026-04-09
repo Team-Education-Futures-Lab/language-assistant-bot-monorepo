@@ -265,7 +265,7 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="dashboard-card bg-white rounded-lg shadow-md p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-lg font-semibold text-gray-800">
@@ -281,7 +281,7 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
           </button>
           <button
             onClick={() => setShowFileUpload(!showFileUpload)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            className="dashboard-primary-btn flex items-center gap-2 px-4 py-2 transition"
           >
             <FileUp size={18} />
             Bestand Uploaden

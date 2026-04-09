@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600;700&display=swap');
+
 * {
   margin: 0;
   padding: 0;
@@ -9,9 +11,170 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans',
-    'Helvetica Neue', sans-serif;
+  --dash-bg: #f4f7fb;
+  --dash-bg-soft: #edf2f8;
+  --dash-surface: #ffffff;
+  --dash-surface-muted: #f9fbfe;
+  --dash-border: #dbe3ee;
+  --dash-text: #1d2a3a;
+  --dash-text-soft: #5c6f86;
+  --dash-accent: #1162d4;
+  --dash-accent-hover: #0b4ca8;
+  --dash-success: #0c9f72;
+  --dash-danger: #d14343;
+  --dash-shadow: 0 14px 34px rgba(24, 42, 76, 0.08);
+  --dash-shadow-soft: 0 8px 20px rgba(24, 42, 76, 0.05);
+  font-family: 'Source Sans 3', 'Segoe UI', sans-serif;
+  font-size: 15px;
+  background:
+    radial-gradient(circle at 8% 8%, rgba(17, 98, 212, 0.12), transparent 30%),
+    radial-gradient(circle at 92% 16%, rgba(12, 159, 114, 0.1), transparent 25%),
+    linear-gradient(180deg, #f7faff 0%, var(--dash-bg) 60%, var(--dash-bg-soft) 100%);
+  color: var(--dash-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.dashboard-root {
+  background: transparent;
+}
+
+.dashboard-sidebar,
+.dashboard-main-panel,
+.dashboard-card {
+  border-color: var(--dash-border) !important;
+  box-shadow: var(--dash-shadow-soft);
+}
+
+.dashboard-sidebar {
+  background: linear-gradient(180deg, #070d19 0%, #0b1528 52%, #12213a 100%);
+  color: #edf3ff;
+  backdrop-filter: blur(4px);
+}
+
+.dashboard-brand {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #f7faff;
+}
+
+.dashboard-sidebar .border-gray-200,
+.dashboard-sidebar.border-r {
+  border-color: rgba(255, 255, 255, 0.16) !important;
+}
+
+.dashboard-sidebar .text-gray-500,
+.dashboard-sidebar .text-gray-600,
+.dashboard-sidebar .text-gray-700 {
+  color: #c9d8f6 !important;
+}
+
+.dashboard-sidebar button {
+  color: #edf3ff;
+}
+
+.dashboard-main-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+}
+
+.dashboard-topbar {
+  background: linear-gradient(120deg, #ffffff 0%, #f6f9ff 100%);
+}
+
+.dashboard-card {
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-border);
+  border-radius: 14px;
+}
+
+.dashboard-root input,
+.dashboard-root textarea,
+.dashboard-root select {
+  border-radius: 12px !important;
+  border-color: #c9d5e4 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.dashboard-root input:focus,
+.dashboard-root textarea:focus,
+.dashboard-root select:focus {
+  border-color: #76a8ef !important;
+  box-shadow: 0 0 0 3px rgba(17, 98, 212, 0.14) !important;
+}
+
+.dashboard-root button {
+  border-radius: 10px;
+  font-weight: 500;
+  font-size: 0.88rem;
+  line-height: 1.2;
+}
+
+.dashboard-primary-btn {
+  background: linear-gradient(135deg, var(--dash-accent) 0%, #2b79e6 100%) !important;
+  color: #fff !important;
+  border: 1px solid rgba(6, 60, 136, 0.3) !important;
+  box-shadow: 0 10px 20px rgba(17, 98, 212, 0.18);
+  padding-top: 0.36rem !important;
+  padding-bottom: 0.36rem !important;
+}
+
+.dashboard-primary-btn:hover {
+  background: linear-gradient(135deg, var(--dash-accent-hover) 0%, #1f63c8 100%) !important;
+}
+
+.dashboard-secondary-btn {
+  background: #fff !important;
+  color: #2f4259 !important;
+  border: 1px solid #cdd8e6 !important;
+  padding-top: 0.32rem !important;
+  padding-bottom: 0.32rem !important;
+}
+
+.dashboard-sidebar .dashboard-secondary-btn {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #f1f6ff !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+}
+
+.dashboard-status-ok {
+  color: var(--dash-success) !important;
+}
+
+.dashboard-status-bad {
+  color: var(--dash-danger) !important;
+}
+
+.dashboard-root .text-gray-600,
+.dashboard-root .text-gray-500 {
+  color: var(--dash-text-soft) !important;
+}
+
+.dashboard-root .text-gray-800,
+.dashboard-root .text-gray-700 {
+  color: var(--dash-text) !important;
+}
+
+/* Make the dashboard feel lighter by reducing padding scale. */
+.dashboard-root .p-6 {
+  padding: 1rem !important;
+}
+
+.dashboard-root .p-4 {
+  padding: 0.75rem !important;
+}
+
+.dashboard-root .py-12 {
+  padding-top: 2rem !important;
+  padding-bottom: 2rem !important;
+}
+
+@media (max-width: 960px) {
+  .dashboard-sidebar {
+    box-shadow: 8px 0 18px rgba(24, 42, 76, 0.12);
+  }
 }

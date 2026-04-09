@@ -15,7 +15,18 @@ const configuredApiBaseUrl =
   process.env.REACT_APP_API_BASE_URL ||
   process.env.VITE_AI_API_BASE_URL;
 
+const CONFIG_ERROR_MESSAGE =
+  'Chatbot API base URL is not configured. Set REACT_APP_API_BASE_URL in the frontend environment.';
+
+if (!configuredApiBaseUrl) {
+  console.error(CONFIG_ERROR_MESSAGE);
+}
+
 const buildRealtimeWsUrl = (apiBaseUrl) => {
+  if (!apiBaseUrl) {
+    return '';
+  }
+
   try {
     const parsed = new URL(apiBaseUrl);
     parsed.protocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -28,44 +39,55 @@ const buildRealtimeWsUrl = (apiBaseUrl) => {
   }
 };
 
-export const API_BASE_URL = configuredApiBaseUrl.replace(/\/$/, '');
+export const API_BASE_URL = configuredApiBaseUrl
+  ? configuredApiBaseUrl.replace(/\/$/, '')
+  : '';
+
 export const STREAMING_VOICE_WS_URL =
   process.env.REACT_APP_STREAMING_VOICE_WS_URL ||
-  buildRealtimeWsUrl(API_BASE_URL);
+  (API_BASE_URL ? buildRealtimeWsUrl(API_BASE_URL) : '');
+
+const getUnavailableApiMessage = () => {
+  if (!API_BASE_URL) {
+    return `${CONFIG_ERROR_MESSAGE} ${REMOVED_API_MESSAGE}`;
+  }
+
+  return REMOVED_API_MESSAGE;
+};
 
 // Query the backend API with text - with streaming support
 export const queryBackendAPI = async (question, onChunk) => {
-  return { success: false, error: REMOVED_API_MESSAGE };
+  return { success: false, error: getUnavailableApiMessage() };
 };
 
 // Query the backend API with speech
 export const queryBackendAPISpeech = async (audioBlob, options = {}) => {
-  return { success: false, error: REMOVED_API_MESSAGE };
+  return { success: false, error: getUnavailableApiMessage() };
 };
 
 // Synthesize speech audio from text via backend TTS endpoint
 export const synthesizeSpeechAudio = async (text) => {
-  return { success: false, error: REMOVED_API_MESSAGE };
+  return { success: false, error: getUnavailableApiMessage() };
 };
 
 // Start a live STT session
 export const startLiveSttSession = async () => {
-  return { success: false, error: REMOVED_API_MESSAGE };
+  return { success: false, error: getUnavailableApiMessage() };
 };
 
 // Send one audio chunk and receive partial transcript
 export const sendLiveSttChunk = async (sessionId, audioBlob, isFinal = false) => {
-  return { success: false, error: REMOVED_API_MESSAGE };
+  return { success: false, error: getUnavailableApiMessage() };
 };
 
 // Finalize session and get full transcript
 export const finalizeLiveSttSession = async (sessionId) => {
-  return { success: false, error: REMOVED_API_MESSAGE };
+  return { success: false, error: getUnavailableApiMessage() };
 };
 
 // Abort session cleanup
 export const abortLiveSttSession = async (sessionId) => {
-  return { success: false, error: REMOVED_API_MESSAGE };
+  return { success: false, error: getUnavailableApiMessage() };
 };
 
 // ============================================================================
@@ -76,7 +98,7 @@ export const abortLiveSttSession = async (sessionId) => {
 export const sendLiveSttChunkWithResponse = async (sessionId, audioBlob, isFinal = false) => {
   return {
     success: false,
-    error: REMOVED_API_MESSAGE,
+    error: getUnavailableApiMessage(),
     partialText: '',
     response: '',
     responseReady: false

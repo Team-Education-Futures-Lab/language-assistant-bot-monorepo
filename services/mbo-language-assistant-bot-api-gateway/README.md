@@ -1,142 +1,111 @@
 # MBO Language Assistant - API Gateway
 
-Central backend gateway for the MBO Language Assistant services.
+Central HTTP and WebSocket gateway for frontend clients.
 
-This service is the single entry point for frontend clients and proxies requests to the appropriate microservices:
-- text input service
-- speech input service
-- retrieve service
-- database manager service
-- realtime voice service
+## Current Responsibilities
 
-## What This Service Does
+- Proxies subject, chunk, prompt, settings, and retrieve requests to the database manager service.
+- Proxies realtime voice WebSocket traffic to the realtime voice service.
+- Exposes health endpoints for gateway-only and full dependency checks.
+- Enforces CORS allowlist and default request rate limiting.
 
-- Exposes unified HTTP endpoints for text, speech, TTS, subjects, prompts, settings, and live STT.
-- Streams text-query responses back to the client as NDJSON.
-- Proxies WebSocket traffic for realtime voice between frontend and realtime voice service.
-- Provides service-level health checks.
+## Runtime Endpoints
 
-## Project Files
-
-- api_gateway.py: main Flask gateway with HTTP and WebSocket proxy routes.
-- requirements.txt: Python dependencies.
-- Dockerfile: container image build file.
-- .env.example: local configuration template.
-- .gitignore: ignores environment files and runtime artifacts.
+- GET `/api/query/health/gateway`
+- GET `/api/query/health`
+- GET `/api/query/health/all` (alias)
+- GET/POST `/api/query/subjects`
+- GET/PUT/DELETE `/api/query/subjects/{subject_id}`
+- POST `/api/query/subjects/{subject_id}/upload`
+- DELETE `/api/query/subjects/{subject_id}/uploads/{upload_name}`
+- GET/POST `/api/query/subjects/{subject_id}/chunks`
+- GET/POST `/api/query/prompts`
+- GET `/api/query/prompts/active`
+- GET/PUT/DELETE `/api/query/prompts/{prompt_id}`
+- GET/POST `/api/query/settings`
+- GET/PUT/PATCH/DELETE `/api/query/settings/{key}`
+- POST `/api/query/retrieve`
+- WS `/api/query/ws/realtime-voice`
 
 ## Environment Variables
 
-Create a local .env file in this folder.
+Use [.env.example](.env.example) as template.
 
-Example values:
+Important keys:
 
-```env
-GATEWAY_HOST=localhost
-GATEWAY_PORT=5000
+- `APP_ENV=development|production`
+- `LOG_LEVEL=INFO|WARNING|ERROR`
+- `GATEWAY_HOST` and `GATEWAY_PORT` (for local dev)
+- `PORT` (platform-injected port in production)
+- `DATABASE_SERVICE_URL`
+- `REALTIME_VOICE_SERVICE_URL`
+- `REALTIME_VOICE_SERVICE_WS_URL`
+- `FRONTEND_CHATBOT_ORIGIN`
+- `FRONTEND_DASHBOARD_ORIGIN`
+- `FRONTEND_ALLOWED_ORIGINS` (comma-separated extra origins)
+- `RATE_LIMIT_DEFAULT` (example: `120 per minute`)
+- `USE_PROXY_FIX` and `PROXY_FIX_*` (for reverse-proxy deployments)
+- `WEB_CONCURRENCY` and `GUNICORN_*` (production process tuning)
 
-TEXT_SERVICE_URL=http://localhost:5001
-SPEECH_SERVICE_URL=http://localhost:5002
-RETRIEVE_SERVICE_URL=http://localhost:5003
-DATABASE_SERVICE_URL=http://localhost:5004
-
-REALTIME_VOICE_SERVICE_URL=http://localhost:5005
-REALTIME_VOICE_SERVICE_WS_URL=ws://localhost:5005/ws/realtime-voice
-
-GATEWAY_BACKEND_WS_TIMEOUT_SEC=180
-GATEWAY_BACKEND_WS_PING_INTERVAL_SEC=0
-```
-
-## HTTP Endpoints
-
-Health:
-- GET /
-- GET /health
-
-Query:
-- POST /api/query/text
-- POST /api/query/speech
-- POST /api/tts
-- POST /api/query
-
-Subjects and chunks:
-- GET, POST /api/subjects
-- GET, PUT, DELETE /api/subjects/{subject_id}
-- POST /api/subjects/{subject_id}/upload
-- DELETE /api/subjects/{subject_id}/uploads/{upload_name}
-- GET, POST /api/subjects/{subject_id}/chunks
-
-Prompts:
-- GET, POST /api/prompts
-- GET /api/prompts/active
-- GET, PUT, DELETE /api/prompts/{prompt_id}
-
-Settings:
-- GET, POST /api/settings
-- GET, DELETE /api/settings/{key}
-
-Live STT:
-- POST /api/live-stt/start
-- POST /api/live-stt/chunk
-- POST /api/live-stt/chunk-with-response
-- POST /api/live-stt/finalize
-- DELETE /api/live-stt/session/{session_id}
-
-## WebSocket Endpoint
-
-- WS /ws/realtime-voice
-
-Behavior:
-- Accepts frontend WebSocket connection.
-- Opens backend WebSocket connection to realtime voice service.
-- Forwards messages bidirectionally.
-- Optional keepalive pings controlled by GATEWAY_BACKEND_WS_PING_INTERVAL_SEC.
-
-## Local Development
-
-1. Create and activate virtual environment.
+## Local Development (unchanged)
 
 ```bash
 python -m venv .venv
-# PowerShell
-.venv\Scripts\Activate.ps1
-# CMD
-.venv\Scripts\activate.bat
-```
-
-2. Install dependencies.
-
-```bash
+.venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-3. Run the gateway.
-
-```bash
 python api_gateway.py
 ```
 
-Default URL:
+## Production Deployment (recommended)
 
-```text
-http://localhost:5000
-```
-
-## Docker
-
-Build image:
+1. Install production dependencies:
 
 ```bash
-docker build -t mbo-api-gateway .
+pip install -r requirements-prod.txt
 ```
 
-Run container:
+2. Start with a production WSGI server (includes WebSocket worker):
 
 ```bash
-docker run --rm -p 5000:5000 --env-file .env mbo-api-gateway python api_gateway.py
+gunicorn -c gunicorn_conf.py api_gateway:app
 ```
 
-## Security Notes
+If the platform supports Procfile-based startup, this repository already includes [Procfile](Procfile) with the same command.
 
-- No hardcoded API keys were found in current source or .env.example.
-- Keep secrets in local .env only.
-- This repo currently ignores both .env and .env.example by default.
+## Generic Platform Setup
+
+Use these values in any host platform UI:
+
+- Build command: `pip install -r requirements-prod.txt`
+- Start command: `gunicorn -c gunicorn_conf.py api_gateway:app`
+
+Required environment variables:
+
+- `APP_ENV=production`
+- `DATABASE_SERVICE_URL`
+- `REALTIME_VOICE_SERVICE_URL`
+- `REALTIME_VOICE_SERVICE_WS_URL`
+- `FRONTEND_CHATBOT_ORIGIN`
+- `FRONTEND_DASHBOARD_ORIGIN`
+
+Usually auto-provided by platform:
+
+- `PORT`
+
+Optional but recommended:
+
+- `FRONTEND_ALLOWED_ORIGINS`
+- `RATE_LIMIT_DEFAULT`
+- `USE_PROXY_FIX=true`
+- `WEB_CONCURRENCY`
+- `GUNICORN_TIMEOUT`
+- `GUNICORN_GRACEFUL_TIMEOUT`
+- `GUNICORN_KEEPALIVE`
+- `GUNICORN_LOG_LEVEL`
+
+## Notes For Hosting Platforms
+
+- Do not run `python api_gateway.py` in production.
+- Keep `python api_gateway.py` for local development only.
+- Make sure the platform domain(s) are added to CORS variables.
+- Ensure `DATABASE_SERVICE_URL` and `REALTIME_VOICE_SERVICE_URL` are reachable from the deployed gateway.

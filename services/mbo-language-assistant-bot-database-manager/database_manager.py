@@ -6,10 +6,13 @@ Uses Supabase REST API (works on Eduroam/network-restricted connections)
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from supabase import create_client, Client
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_postgres import PGVector
 from pypdf import PdfReader
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import os
@@ -21,9 +24,32 @@ from datetime import datetime, timezone
 load_dotenv()
 
 # --- Service Configuration ---
+APP_ENV = os.getenv('APP_ENV', os.getenv('FLASK_ENV', 'development')).lower()
 SERVICE_HOST = os.getenv('SERVICE_HOST', "localhost")
-SERVICE_PORT = int(os.getenv('SERVICE_PORT', 5004))
+SERVICE_PORT = int(os.getenv('PORT', os.getenv('SERVICE_PORT', 5004)))
 SERVICE_NAME = "Database Manager Service"
+
+
+def _get_bool_env(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _parse_allowed_gateway_origins():
+    gateway_origin = os.getenv('API_GATEWAY_ORIGIN', 'http://localhost:5000').strip()
+    extra_origins_raw = os.getenv('API_GATEWAY_ALLOWED_ORIGINS', '').strip()
+
+    origins = [gateway_origin]
+    if extra_origins_raw:
+        origins.extend(origin.strip() for origin in extra_origins_raw.split(',') if origin.strip())
+
+    unique_origins = []
+    for origin in origins:
+        if origin and origin not in unique_origins:
+            unique_origins.append(origin)
+    return unique_origins
 
 # --- Supabase Configuration ---
 SUPABASE_URL = os.getenv('SUPABASE_URL')
@@ -55,7 +81,28 @@ if not os.path.exists(UPLOAD_FOLDER):
 # Initialize Flask app
 app = Flask(__name__)
 app.config['JSON_SORT_KEYS'] = False
-CORS(app, resources={r"/*": {"origins": "*"}})
+
+ALLOWED_GATEWAY_ORIGINS = _parse_allowed_gateway_origins()
+CORS(app, resources={r"/*": {"origins": ALLOWED_GATEWAY_ORIGINS}})
+
+# Respect reverse proxy headers when deployed behind a platform/load balancer.
+if _get_bool_env('USE_PROXY_FIX', default=(APP_ENV == 'production')):
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=int(os.getenv('PROXY_FIX_X_FOR', '1')),
+        x_proto=int(os.getenv('PROXY_FIX_X_PROTO', '1')),
+        x_host=int(os.getenv('PROXY_FIX_X_HOST', '1')),
+        x_port=int(os.getenv('PROXY_FIX_X_PORT', '1')),
+        x_prefix=int(os.getenv('PROXY_FIX_X_PREFIX', '1')),
+    )
+
+RATE_LIMIT_DEFAULT = os.getenv('RATE_LIMIT_DEFAULT', '120 per minute')
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[RATE_LIMIT_DEFAULT],
+    storage_uri='memory://',
+)
 
 logging.basicConfig(
     level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper(), logging.INFO),
@@ -178,14 +225,27 @@ def extract_text_from_file(filepath):
         return None
 
 
-@app.route('/health', methods=['GET'])
+@app.route('/health/all', methods=['GET'])
 def health():
-    """Health check endpoint"""
+    """Full health check: database-manager server plus Supabase/vector DB connectivity."""
     return jsonify({
         'status': 'healthy',
         'service': SERVICE_NAME,
         'database': 'connected' if db_connected else 'disconnected',
         'vector_database': 'connected' if vector_db_connected else 'disconnected'
+    }), 200
+
+
+@app.route('/health', methods=['GET'])
+def health_server_only():
+    """Health check for the database-manager process only."""
+    return jsonify({
+        'status': 'healthy',
+        'service': SERVICE_NAME,
+        'database_manager': {
+            'host': SERVICE_HOST,
+            'port': SERVICE_PORT,
+        }
     }), 200
 
 
@@ -1324,8 +1384,16 @@ if __name__ == '__main__':
     print(f"\n{SERVICE_NAME} starting on http://{SERVICE_HOST}:{SERVICE_PORT}")
     print(f"Database: Supabase ({SUPABASE_URL})")
     print(f"Upload folder: {UPLOAD_FOLDER}")
+    print(f"\nEnvironment:")
+    print(f"  - APP_ENV:            {APP_ENV}")
+    print(f"  - RATE_LIMIT_DEFAULT: {RATE_LIMIT_DEFAULT}")
+    print(f"  - API_GATEWAY_ORIGIN: {os.getenv('API_GATEWAY_ORIGIN', 'http://localhost:5000')}")
+    if os.getenv('API_GATEWAY_ALLOWED_ORIGINS', '').strip():
+        print(f"  - Extra origins:      {os.getenv('API_GATEWAY_ALLOWED_ORIGINS')}")
+    print(f"  - USE_PROXY_FIX:      {_get_bool_env('USE_PROXY_FIX', default=(APP_ENV == 'production'))}")
     print(f"\nEndpoints:")
-    print(f"  - Health:        GET    http://{SERVICE_HOST}:{SERVICE_PORT}/health")
+    print(f"  - Server Health: GET    http://{SERVICE_HOST}:{SERVICE_PORT}/health")
+    print(f"  - Full Health:   GET    http://{SERVICE_HOST}:{SERVICE_PORT}/health/all")
     print(f"  - Subjects:      GET    http://{SERVICE_HOST}:{SERVICE_PORT}/subjects")
     print(f"  - Add Subject:   POST   http://{SERVICE_HOST}:{SERVICE_PORT}/subjects")
     print(f"  - Get Subject:   GET    http://{SERVICE_HOST}:{SERVICE_PORT}/subjects/<id>")
@@ -1346,10 +1414,14 @@ if __name__ == '__main__':
     print(f"\n{SERVICE_NAME} is ready to receive requests...")
     print(f"{'='*70}\n")
     
-    # Initialize Supabase
-    if init_supabase():
-        init_vector_db()
-        app.run(host=SERVICE_HOST, port=SERVICE_PORT, debug=False)
-    else:
+    # Initialize services
+    if not init_supabase():
         print("✗ Failed to initialize Supabase. Check your credentials.")
         exit(1)
+    init_vector_db()
+    app.run(host=SERVICE_HOST, port=SERVICE_PORT, debug=False)
+
+# Initialize clients when imported by a production WSGI server (e.g. gunicorn).
+if __name__ != '__main__':
+    init_supabase()
+    init_vector_db()

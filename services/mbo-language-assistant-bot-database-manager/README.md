@@ -1,167 +1,98 @@
 # MBO Language Assistant - Database Manager Service
 
-Flask-based REST service for managing subjects, course-material chunks, prompts, and system settings in Supabase.
+Flask REST service for subjects, chunks, prompts, runtime settings, and retrieval.
 
-This service is part of the MBO language assistant stack and is designed to:
-- manage subject metadata
-- ingest learning materials (TXT/PDF) and split them into chunks
-- store and manage prompts used by LLM-facing services
-- expose settings such as per-subject retrieval configuration
+## Current Responsibilities
 
-## Tech Stack
-
-- Python 3.11
-- Flask + Flask-CORS
-- Supabase Python client
-- python-dotenv
-- pypdf
-
-## Repository Structure
-
-- database_manager.py: main Flask API service and endpoint definitions
-- requirements.txt: Python dependencies
-- Dockerfile: container build instructions
-- models.py: SQLAlchemy model definitions (reference/legacy model layer)
-- migrations/: SQL migrations for Supabase schema updates
-- uploads/: temporary upload folder used during file processing
-- .env: local environment variables (ignored by Git)
-- .gitignore: excludes local secrets and machine artifacts
-
-## Environment Variables
-
-Create a .env file in the project root with at least:
-
-```env
-SERVICE_HOST=localhost
-SERVICE_PORT=5004
-LOG_LEVEL=INFO
-
-SUPABASE_URL=https://<your-project>.supabase.co
-SUPABASE_KEY=<your-supabase-key>
-```
-
-Notes:
-- SUPABASE_KEY should be treated as secret.
-- .env is included in .gitignore and should never be committed.
-
-## Local Development
-
-1. Create and activate a virtual environment
-
-```bash
-python -m venv .venv
-# Windows PowerShell
-.venv\Scripts\Activate.ps1
-# Windows CMD
-.venv\Scripts\activate.bat
-```
-
-2. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-3. Run the service
-
-```bash
-python database_manager.py
-```
-
-Default base URL:
-
-```text
-http://localhost:5004
-```
-
-## Docker
-
-Build image:
-
-```bash
-docker build -t mbo-db-manager .
-```
-
-Run container (explicit startup command):
-
-```bash
-docker run --rm -p 5004:5004 --env-file .env mbo-db-manager python database_manager.py
-```
-
-Note:
-- The Dockerfile currently exposes port 5004 and installs dependencies, but does not define a default CMD.
+- Stores and manages subjects, prompts, chunked content, and runtime settings in Supabase.
+- Handles file upload/chunking for TXT/PDF learning material.
+- Exposes retrieval endpoint with vector search and fallback lexical ranking.
+- Enforces CORS allowlist and default request rate limits.
 
 ## API Overview
 
 Health:
-- GET /health
+- GET `/health` (server-only)
+- GET `/health/all` (server + dependency status)
 
-Subjects:
-- GET /subjects
-- POST /subjects
-- GET /subjects/{subject_id}
-- PUT /subjects/{subject_id}
-- DELETE /subjects/{subject_id}
+Core endpoints:
+- GET/POST `/subjects`
+- GET/PUT/DELETE `/subjects/{subject_id}`
+- POST `/subjects/{subject_id}/upload`
+- DELETE `/subjects/{subject_id}/uploads/{upload_name}`
+- GET/POST `/subjects/{subject_id}/chunks`
+- POST `/subjects/{subject_id}/chunks/bulk`
+- GET/PUT/DELETE `/chunks/{chunk_id}`
+- GET/POST `/prompts`
+- GET `/prompts/active`
+- GET/PUT/PATCH/DELETE `/prompts/{prompt_id}`
+- GET/POST `/settings`
+- GET/PUT/PATCH/DELETE `/settings/{key}`
+- POST `/retrieve`
 
-Prompts (global):
-- GET /prompts
-- POST /prompts
-- GET /prompts/{prompt_id}
-- PUT/PATCH /prompts/{prompt_id}
-- DELETE /prompts/{prompt_id}
-- GET /prompts/active
+## Environment Variables
 
-Uploads and Chunks:
-- POST /subjects/{subject_id}/upload
-- DELETE /subjects/{subject_id}/uploads/{upload_name}
-- GET /subjects/{subject_id}/chunks
-- POST /subjects/{subject_id}/chunks
-- POST /subjects/{subject_id}/chunks/bulk
-- GET /chunks/{chunk_id}
-- PUT /chunks/{chunk_id}
-- DELETE /chunks/{chunk_id}
+Use `.env.example` as template.
 
-Settings:
-- GET /settings
-- POST /settings
-- GET /settings/{key}
-- DELETE /settings/{key}
+Required:
 
-## File Upload Behavior
+- `SUPABASE_URL`
+- `SUPABASE_KEY`
 
-- Supported extensions: txt, pdf, docx, doc
-- Max file size: 50 MB
-- Current extraction support:
-  - txt: supported
-  - pdf: supported
-  - doc/docx: accepted by extension check, but text extraction currently returns no content
+Runtime and networking:
 
-## Database and Migrations
+- `APP_ENV=development|production`
+- `LOG_LEVEL=INFO|WARNING|ERROR`
+- `SERVICE_HOST` and `SERVICE_PORT` (local dev)
+- `PORT` (platform-injected in production)
 
-Migrations are under migrations/.
+CORS (allow only API Gateway):
 
-Current migration file:
-- 001_create_prompts_table.sql
+- `API_GATEWAY_ORIGIN` (primary allowed origin)
+- `API_GATEWAY_ALLOWED_ORIGINS` (optional comma-separated extra allowed origins)
 
-To apply manually in Supabase:
-1. Open Supabase SQL Editor.
-2. Run SQL from migrations/001_create_prompts_table.sql.
+Rate limit and proxy:
 
-## Security Notes
+- `RATE_LIMIT_DEFAULT` (example: `120 per minute`)
+- `USE_PROXY_FIX` and `PROXY_FIX_*`
 
-- Keep SUPABASE_KEY only in .env or secure runtime secret storage.
-- Avoid logging secret values from request payloads or settings.
-- Do not commit .env, local databases, or temporary uploads.
+Production process tuning:
 
-## Troubleshooting
+- `WEB_CONCURRENCY`
+- `GUNICORN_WORKER_CLASS`
+- `GUNICORN_THREADS`
+- `GUNICORN_TIMEOUT`
+- `GUNICORN_GRACEFUL_TIMEOUT`
+- `GUNICORN_KEEPALIVE`
+- `GUNICORN_LOG_LEVEL`
 
-- Supabase init fails:
-  - Verify SUPABASE_URL and SUPABASE_KEY are present and valid.
-- Upload fails with no extracted content:
-  - Confirm file type is supported for extraction (TXT/PDF currently best supported).
-- Port conflict on 5004:
-  - Change SERVICE_PORT in .env and rerun.
+## Local Development
 
-## License
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+python database_manager.py
+```
 
-Add your preferred license for open-source or internal use.
+## Production Deployment (generic)
+
+Build command:
+
+```bash
+pip install -r requirements-prod.txt
+```
+
+Start command:
+
+```bash
+gunicorn -c gunicorn_conf.py database_manager:app
+```
+
+If the platform supports Procfile startup, this repository includes `Procfile` with the same command.
+
+## Notes
+
+- Keep `python database_manager.py` for local dev only.
+- In production, set `API_GATEWAY_ORIGIN` to your deployed API gateway domain.
+- Keep `SUPABASE_KEY` in platform secret storage.

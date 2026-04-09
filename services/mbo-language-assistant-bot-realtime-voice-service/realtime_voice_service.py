@@ -20,8 +20,11 @@ import time
 import requests
 from flask import Flask, jsonify
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from flask_sock import Sock
 from dotenv import load_dotenv
+from werkzeug.middleware.proxy_fix import ProxyFix
 from simple_websocket import ConnectionClosed
 from websocket import WebSocketConnectionClosedException, WebSocketTimeoutException, create_connection
 
@@ -39,9 +42,33 @@ logging.basicConfig(
 log = logging.getLogger('realtime_voice')
 
 
+APP_ENV = os.getenv('APP_ENV', os.getenv('FLASK_ENV', 'development')).lower()
 SERVICE_HOST = os.getenv('SERVICE_HOST', 'localhost')
-SERVICE_PORT = int(os.getenv('SERVICE_PORT', 5005))
+SERVICE_PORT = int(os.getenv('PORT', os.getenv('SERVICE_PORT', 5005)))
 SERVICE_NAME = 'Realtime Voice Service'
+RATE_LIMIT_DEFAULT = os.getenv('RATE_LIMIT_DEFAULT', '120 per minute')
+
+
+def _get_bool_env(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _parse_allowed_gateway_origins():
+    gateway_origin = os.getenv('API_GATEWAY_ORIGIN', 'http://localhost:5000').strip()
+    extra_origins_raw = os.getenv('API_GATEWAY_ALLOWED_ORIGINS', '').strip()
+
+    origins = [gateway_origin]
+    if extra_origins_raw:
+        origins.extend(origin.strip() for origin in extra_origins_raw.split(',') if origin.strip())
+
+    unique_origins = []
+    for origin in origins:
+        if origin and origin not in unique_origins:
+            unique_origins.append(origin)
+    return unique_origins
 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 OPENAI_REALTIME_MODEL = os.getenv('OPENAI_REALTIME_MODEL', 'gpt-4o-mini-realtime-preview')
@@ -181,8 +208,24 @@ def get_runtime_setting(key: str, default_value, value_type=str):
 
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app, resources={r"/*": {"origins": _parse_allowed_gateway_origins()}})
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[RATE_LIMIT_DEFAULT],
+    storage_uri='memory://',
+)
 sock = Sock(app)
+
+if _get_bool_env('USE_PROXY_FIX', default=(APP_ENV == 'production')):
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=int(os.getenv('PROXY_FIX_X_FOR', '1')),
+        x_proto=int(os.getenv('PROXY_FIX_X_PROTO', '1')),
+        x_host=int(os.getenv('PROXY_FIX_X_HOST', '1')),
+        x_port=int(os.getenv('PROXY_FIX_X_PORT', '1')),
+        x_prefix=int(os.getenv('PROXY_FIX_X_PREFIX', '1')),
+    )
 
 
 def build_openai_session_config():
@@ -775,6 +818,7 @@ def openai_listener(state: dict):
 
 
 @app.route('/', methods=['GET'])
+@limiter.limit(RATE_LIMIT_DEFAULT)
 def root():
     return jsonify(
         {
@@ -786,6 +830,7 @@ def root():
 
 
 @app.route('/health', methods=['GET'])
+@limiter.limit(RATE_LIMIT_DEFAULT)
 def health():
     api_key_present = bool(OPENAI_API_KEY)
 
@@ -884,3 +929,7 @@ if __name__ == '__main__':
     log.info('Starting %s on http://%s:%s', SERVICE_NAME, SERVICE_HOST, SERVICE_PORT)
     log.info('Model: %s | Voice: %s | API key present: %s', OPENAI_REALTIME_MODEL, OPENAI_REALTIME_VOICE, bool(OPENAI_API_KEY))
     app.run(host=SERVICE_HOST, port=SERVICE_PORT, debug=False, threaded=True)
+
+
+if __name__ != '__main__':
+    log.info('Realtime voice service loaded by WSGI server')

@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Plus, MessageSquare, Settings, HelpCircle, Trash2, Edit3, MoreHorizontal, User, PanelLeftOpen, PanelLeftClose } from 'lucide-react';
-import appLogo from '../logo.svg';
+import appLogo from '../images/yonder_logo.png';
 
 export default function Sidebar({
   conversations,
   activeId,
   currentPage,
   onSwitchPage,
+  onGoHome,
   onNewChat,
   onSelectChat,
   onDeleteChat,
@@ -71,12 +72,19 @@ export default function Sidebar({
       <div className="sticky top-0 z-20 bg-app-sidebar border-b border-app-border">
         <div className="h-14 px-2 flex items-center justify-between">
           <button
-            className="h-9 w-9 rounded-lg border-none bg-transparent p-0 cursor-pointer flex items-center justify-center hover:bg-gray-200 transition-colors duration-200"
-            onClick={() => onSwitchPage('chat')}
+            className="h-9 rounded-lg border-none bg-transparent px-2 cursor-pointer flex items-center gap-2 hover:bg-gray-200 transition-colors duration-200"
+            onClick={() => {
+              if (onGoHome) {
+                onGoHome();
+              } else {
+                onSwitchPage('chat');
+              }
+            }}
             title="Home"
             aria-label="Home"
           >
             <img src={appLogo} alt="MindLab logo" className="w-7 h-7 object-contain" />
+            <span className="text-sm font-semibold text-app-text-primary">NT2 Chatbot</span>
           </button>
 
           <button
