@@ -19,6 +19,7 @@ Central HTTP and WebSocket gateway for frontend clients.
 - POST `/api/query/subjects/{subject_id}/upload`
 - DELETE `/api/query/subjects/{subject_id}/uploads/{upload_name}`
 - GET/POST `/api/query/subjects/{subject_id}/chunks`
+- GET/PUT/DELETE `/api/query/chunks/{chunk_id}`
 - GET/POST `/api/query/prompts`
 - GET `/api/query/prompts/active`
 - GET/PUT/DELETE `/api/query/prompts/{prompt_id}`

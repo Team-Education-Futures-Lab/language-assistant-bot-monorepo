@@ -94,5 +94,6 @@ If the platform supports Procfile startup, this repository includes `Procfile` w
 ## Notes
 
 - Keep `python database_manager.py` for local dev only.
+- Frontends should access these endpoints through the API gateway (`/api/query/*`) instead of calling this service directly.
 - In production, set `API_GATEWAY_ORIGIN` to your deployed API gateway domain.
 - Keep `SUPABASE_KEY` in platform secret storage.

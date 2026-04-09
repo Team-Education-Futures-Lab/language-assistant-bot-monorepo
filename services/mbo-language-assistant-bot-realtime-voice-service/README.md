@@ -30,6 +30,7 @@ Important keys:
 - `PORT` (platform-injected in production)
 - `API_GATEWAY_ORIGIN` (primary allowed origin)
 - `API_GATEWAY_ALLOWED_ORIGINS` (optional comma-separated extra origins)
+- `RATE_LIMIT_DEFAULT` (example: `120 per minute`)
 - `USE_PROXY_FIX` and `PROXY_FIX_*`
 - `OPENAI_API_KEY`
 - `OPENAI_REALTIME_MODEL`
