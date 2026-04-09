@@ -1,14 +1,14 @@
 {
   "name": "database-manager",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
-  "root": "services/mbo-language-assistant-bot-database-manager",
-  "sourceRoot": "services/mbo-language-assistant-bot-database-manager",
+  "root": "services/database-manager",
+  "sourceRoot": "services/database-manager",
   "projectType": "application",
   "targets": {
     "serve": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "services/mbo-language-assistant-bot-database-manager",
+        "cwd": "services/database-manager",
         "command": "npx cross-env PYTHONIOENCODING=utf-8 PYTHONUTF8=1 python database_manager.py"
       }
     }

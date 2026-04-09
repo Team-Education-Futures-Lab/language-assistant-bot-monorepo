@@ -30,13 +30,13 @@ Core capabilities:
   - Manages subjects and content chunks through service APIs
 
 ### Backend services
-- `services/mbo-language-assistant-bot-api-gateway`
+- `services/api-gateway`
   - Single entry point for frontend requests
   - Routes requests to downstream services
-- `services/mbo-language-assistant-bot-database-manager`
+- `services/database-manager`
   - CRUD and management APIs for subjects/chunks/settings
   - Connects to Supabase/PostgreSQL
-- `services/mbo-language-assistant-bot-realtime-voice-service`
+- `services/openai-service`
   - WebSocket bridge for live audio/transcript/assistant streaming
   - Integrates with OpenAI realtime flow
 - `services/mbo-language-assistant-bot-retrieve-service`
@@ -95,9 +95,9 @@ npm --prefix mbo-language-assistant-dashboard install
 ```bash
 python -m venv .venv
 .venv\Scripts\activate
-pip install -r services/mbo-language-assistant-bot-api-gateway/requirements.txt
-pip install -r services/mbo-language-assistant-bot-database-manager/requirements.txt
-pip install -r services/mbo-language-assistant-bot-realtime-voice-service/requirements.txt
+pip install -r services/api-gateway/requirements.txt
+pip install -r services/database-manager/requirements.txt
+pip install -r services/openai-service/requirements.txt
 ```
 
 4. Start the full dev stack with Nx.

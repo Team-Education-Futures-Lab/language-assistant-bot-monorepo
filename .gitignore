@@ -16,12 +16,12 @@
 !/mbo-language-assistant-dashboard/**
 
 !/services/
-!/services/mbo-language-assistant-bot-api-gateway/
-!/services/mbo-language-assistant-bot-api-gateway/**
-!/services/mbo-language-assistant-bot-database-manager/
-!/services/mbo-language-assistant-bot-database-manager/**
-!/services/mbo-language-assistant-bot-realtime-voice-service/
-!/services/mbo-language-assistant-bot-realtime-voice-service/**
+!/services/api-gateway/
+!/services/api-gateway/**
+!/services/database-manager/
+!/services/database-manager/**
+!/services/openai-service/
+!/services/openai-service/**
 
 # Explicitly ignore directories you requested to exclude
 /chat_app/

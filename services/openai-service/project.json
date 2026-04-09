@@ -1,14 +1,14 @@
 {
   "name": "realtime-voice-service",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
-  "root": "services/mbo-language-assistant-bot-realtime-voice-service",
-  "sourceRoot": "services/mbo-language-assistant-bot-realtime-voice-service",
+  "root": "services/openai-service",
+  "sourceRoot": "services/openai-service",
   "projectType": "application",
   "targets": {
     "serve": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "services/mbo-language-assistant-bot-realtime-voice-service",
+        "cwd": "services/openai-service",
         "command": "npx cross-env PYTHONIOENCODING=utf-8 PYTHONUTF8=1 python realtime_voice_service.py"
       }
     }

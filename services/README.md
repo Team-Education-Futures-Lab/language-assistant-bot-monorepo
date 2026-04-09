@@ -41,7 +41,7 @@ The ChatBot application now uses a **microservices architecture** with the follo
 
 ### 1. **API Gateway** (Central Backend)
 - **Port**: 5000
-- **Location**: `/services/mbo-language-assistant-bot-api-gateway/api_gateway.py`
+- **Location**: `/services/api-gateway/api_gateway.py`
 - **Purpose**: Acts as the single entry point for all client requests
 - **Responsibilities**:
   - Routes text queries to Text Input Service
@@ -81,7 +81,7 @@ The ChatBot application now uses a **microservices architecture** with the follo
 
 ### 5. **Realtime Voice Service**
 - **Port**: 5005
-- **Location**: `/services/mbo-language-assistant-bot-realtime-voice-service/realtime_voice_service.py`
+- **Location**: `/services/openai-service/realtime_voice_service.py`
 - **Purpose**: Streams chat-page microphone audio over WebSocket and bridges it to OpenAI Realtime.
 - **Responsibilities**:
   - Accepts browser PCM audio chunks via WebSocket
@@ -92,7 +92,7 @@ The ChatBot application now uses a **microservices architecture** with the follo
 
 ### 6. **Database Manager Service** ⭐ NEW
 - **Port**: 5004
-- **Location**: `/services/mbo-language-assistant-bot-database-manager/database_manager.py`
+- **Location**: `/services/database-manager/database_manager.py`
 - **Purpose**: CRUD API for managing course materials and subjects
 - **Database**: Remote Supabase PostgreSQL with pgvector
 - **Responsibilities**:
@@ -160,7 +160,7 @@ Prerequisites
 
 **Database Manager Service:**
 ```bash
-cd services/mbo-language-assistant-bot-database-manager
+cd services/database-manager
 pip install -r requirements.txt
 ```
 
@@ -184,7 +184,7 @@ pip install -r requirements.txt
 
 **API Gateway:**
 ```bash
-cd services/mbo-language-assistant-bot-api-gateway
+cd services/api-gateway
 pip install -r requirements.txt
 ```
 
@@ -192,7 +192,7 @@ pip install -r requirements.txt
 
 **Terminal 1 - Database Manager (Port 5004):**
 ```bash
-cd services/mbo-language-assistant-bot-database-manager
+cd services/database-manager
 export DB_HOST=YOUR_SUPABASE_HOST
 export DB_USER=postgres
 export DB_PASSWORD=YOUR_PASSWORD
@@ -220,7 +220,7 @@ python speech_service.py
 
 **Terminal 5 - API Gateway (Port 5000):**
 ```bash
-cd services/mbo-language-assistant-bot-api-gateway
+cd services/api-gateway
 python api_gateway.py
 ```
 
