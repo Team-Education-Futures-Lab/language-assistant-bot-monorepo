@@ -1,28 +1,28 @@
 {
   "name": "mbo-chatbot-frontend",
   "$schema": "../node_modules/nx/schemas/project-schema.json",
-  "root": "mbo-language-assistant-chatbot",
-  "sourceRoot": "mbo-language-assistant-chatbot/src",
+  "root": "NT2-chatbot",
+  "sourceRoot": "NT2-chatbot/src",
   "projectType": "application",
   "targets": {
     "serve": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "mbo-language-assistant-chatbot",
+        "cwd": "NT2-chatbot",
         "command": "npx cross-env BROWSER=none npm start"
       }
     },
     "build": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "mbo-language-assistant-chatbot",
+        "cwd": "NT2-chatbot",
         "command": "npm run build"
       }
     },
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "mbo-language-assistant-chatbot",
+        "cwd": "NT2-chatbot",
         "command": "npm test -- --watchAll=false"
       }
     }

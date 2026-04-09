@@ -1,28 +1,28 @@
 {
   "name": "mbo-dashboard-frontend",
   "$schema": "../node_modules/nx/schemas/project-schema.json",
-  "root": "mbo-language-assistant-dashboard",
-  "sourceRoot": "mbo-language-assistant-dashboard/src",
+  "root": "dashboard",
+  "sourceRoot": "dashboard/src",
   "projectType": "application",
   "targets": {
     "serve": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "mbo-language-assistant-dashboard",
+        "cwd": "dashboard",
         "command": "npx cross-env PORT_FOR_DEVELOPMENT=3001 BROWSER=none npm start"
       }
     },
     "build": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "mbo-language-assistant-dashboard",
+        "cwd": "dashboard",
         "command": "npm run build"
       }
     },
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "mbo-language-assistant-dashboard",
+        "cwd": "dashboard",
         "command": "npm test -- --watchAll=false"
       }
     }

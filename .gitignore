@@ -10,10 +10,10 @@
 !/README.md
 
 # Keep only intended tracked applications/services
-!/mbo-language-assistant-chatbot/
-!/mbo-language-assistant-chatbot/**
-!/mbo-language-assistant-dashboard/
-!/mbo-language-assistant-dashboard/**
+!/NT2-chatbot/
+!/NT2-chatbot/**
+!/dashboard/
+!/dashboard/**
 
 !/services/
 !/services/api-gateway/

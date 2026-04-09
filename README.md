@@ -22,10 +22,10 @@ Core capabilities:
 ## Monorepo Structure (Tracked Projects)
 
 ### Frontend apps
-- `mbo-language-assistant-chatbot`
+- `NT2-chatbot`
   - React app for students
   - Supports text chat, speech mode, and realtime voice mode
-- `mbo-language-assistant-dashboard`
+- `dashboard`
   - React dashboard for teachers/admins
   - Manages subjects and content chunks through service APIs
 
@@ -70,8 +70,8 @@ Core capabilities:
 ## Quick Orientation
 
 - Start with `services/README.md` for backend architecture and service-level setup.
-- Use `mbo-language-assistant-chatbot/README.md` for frontend behavior and endpoint expectations.
-- Use `mbo-language-assistant-dashboard/README.md` for admin/dashboard capabilities.
+- Use `NT2-chatbot/README.md` for frontend behavior and endpoint expectations.
+- Use `dashboard/README.md` for admin/dashboard capabilities.
 
 ## Start Development With Nx (Step By Step)
 
@@ -86,8 +86,8 @@ npm install
 2. Install frontend dependencies.
 
 ```bash
-npm --prefix mbo-language-assistant-chatbot install
-npm --prefix mbo-language-assistant-dashboard install
+npm --prefix NT2-chatbot install
+npm --prefix dashboard install
 ```
 
 3. Prepare Python services (first time only).

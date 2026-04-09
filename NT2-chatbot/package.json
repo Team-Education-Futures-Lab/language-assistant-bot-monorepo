@@ -1,5 +1,5 @@
 {
-  "name": "mbo-language-assistant-chatbot",
+  "name": "NT2-chatbot",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
@@ -26,7 +26,7 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "start:all": "cd ../services && start python mbo-language-assistant-bot-realtime-voice-service\\realtime_voice_service.py && start python database-manager\\database_manager.py && start python mbo-language-assistant-bot-retrieve-service\\retrieve_service.py && start python api-gateway\\api_gateway.py && cd ../mbo-language-assistant-chatbot && npm start"
+    "start:all": "cd ../services && start python mbo-language-assistant-bot-realtime-voice-service\\realtime_voice_service.py && start python database-manager\\database_manager.py && start python mbo-language-assistant-bot-retrieve-service\\retrieve_service.py && start python api-gateway\\api_gateway.py && cd ../NT2-chatbot && npm start"
   },
   "eslintConfig": {
     "extends": [
