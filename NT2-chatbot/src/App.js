@@ -178,6 +178,7 @@ function App() {
     },
     onTranscriptFinal: (event) => {
       updateLiveVoiceUserMessage(event.transcript || 'Geen transcriptie ontvangen', true);
+      ensureLiveVoiceAssistantMessage();
     },
     onAssistantResponseStarted: () => {
       ensureLiveVoiceAssistantMessage();
@@ -196,6 +197,12 @@ function App() {
       resetLiveVoiceState();
     },
   });
+
+  useEffect(() => {
+    if (activePage !== 'chat') {
+      streamingVoice.endSession();
+    }
+  }, [activePage]);
 
 
   // NOTE: do not auto-scroll on every conversation change. We'll only auto-scroll
@@ -458,6 +465,7 @@ function App() {
   };
 
   const goToMainPage = () => {
+    streamingVoice.endSession();
     setActivePage('chat');
     setActiveConversationId(null);
     setIsStartingNewConversation(false);
@@ -525,6 +533,8 @@ function App() {
               disabled={isGenerating || streamingVoice.isBusy}
               onStartRecording={streamingVoice.startRecording}
               onEndSession={streamingVoice.endSession}
+              playbackSpeed={streamingVoice.playbackSpeed}
+              onPlaybackSpeedChange={streamingVoice.setPlaybackSpeed}
               isRecording={streamingVoice.isRecording}
               isConnecting={streamingVoice.isConnecting}
               isConnected={streamingVoice.isConnected}

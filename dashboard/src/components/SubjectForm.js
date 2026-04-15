@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, X, Trash2 } from 'lucide-react';
+import { Save, X, Trash2, Loader2 } from 'lucide-react';
 import {
   API_BASE_URL,
   createSubject as apiCreateSubject,
@@ -28,6 +28,7 @@ const SubjectForm = ({ subject, onSubmit, onCancel, onDelete }) => {
   const [formData, setFormData] = useState(normalizeSubjectFormData(subject));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [action, setAction] = useState('save');
 
   useEffect(() => {
     setFormData(normalizeSubjectFormData(subject));
@@ -43,6 +44,7 @@ const SubjectForm = ({ subject, onSubmit, onCancel, onDelete }) => {
     e.preventDefault();
     setError('');
     setLoading(true);
+    setAction('save');
 
     try {
       const parsedRetrieval = parseInt(formData.retrieval_k, 10);
@@ -72,6 +74,7 @@ const SubjectForm = ({ subject, onSubmit, onCancel, onDelete }) => {
     }
 
     setLoading(true);
+    setAction('delete');
     try {
       await apiDeleteSubject(subject.id, API_BASE_URL);
       onDelete(subject.id);
@@ -157,8 +160,8 @@ const SubjectForm = ({ subject, onSubmit, onCancel, onDelete }) => {
             disabled={loading}
             className="dashboard-primary-btn flex items-center gap-2 px-6 py-2 transition disabled:opacity-50"
           >
-            <Save size={18} />
-            {loading ? 'Opslaan...' : 'Opslaan'}
+            {loading && action === 'save' ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+            {loading && action === 'save' ? 'Opslaan...' : 'Opslaan'}
           </button>
 
           {subject && onDelete && (
@@ -168,8 +171,8 @@ const SubjectForm = ({ subject, onSubmit, onCancel, onDelete }) => {
               disabled={loading}
               className="flex items-center gap-2 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50"
             >
-              <Trash2 size={18} />
-              Verwijderen
+              {loading && action === 'delete' ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
+              {loading && action === 'delete' ? 'Verwijderen...' : 'Verwijderen'}
             </button>
           )}
 

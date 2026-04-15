@@ -17,5 +17,8 @@
   "devDependencies": {
     "cross-env": "^10.1.0",
     "nx": "^22.6.3"
+  },
+  "dependencies": {
+    "soundtouchjs": "^0.3.0"
   }
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Check, X, AlertCircle, ChevronDown, ChevronRight, Search } from 'lucide-react';
+import { Plus, Edit2, Trash2, Check, X, AlertCircle, ChevronDown, ChevronRight, Search, Loader2 } from 'lucide-react';
 import {
   API_BASE_URL,
   createPrompt as apiCreatePrompt,
@@ -18,6 +18,7 @@ const PromptManager = ({ onPromptsUpdated }) => {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
   const [formData, setFormData] = useState({ title: '', content: '', is_active: true, is_default: false });
+  const [operationState, setOperationState] = useState({ type: null, promptId: null });
 
   useEffect(() => {
     fetchPrompts();
@@ -43,6 +44,7 @@ const PromptManager = ({ onPromptsUpdated }) => {
       return;
     }
 
+    setOperationState({ type: 'create', promptId: null });
     try {
       await apiCreatePrompt(formData, API_BASE_URL);
       await fetchPrompts();
@@ -53,10 +55,13 @@ const PromptManager = ({ onPromptsUpdated }) => {
     } catch (err) {
       setError(err.message || 'Kan prompt niet aanmaken');
       console.error('Error creating prompt:', err);
+    } finally {
+      setOperationState({ type: null, promptId: null });
     }
   };
 
-  const handleUpdate = async (promptId, updates) => {
+  const handleUpdate = async (promptId, updates, operationType = 'update') => {
+    setOperationState({ type: operationType, promptId });
     try {
       console.log('Updating prompt:', promptId, updates);
       await apiUpdatePrompt(promptId, updates, API_BASE_URL);
@@ -67,6 +72,8 @@ const PromptManager = ({ onPromptsUpdated }) => {
       const errorMsg = `Kan prompt niet bijwerken: ${err.message}`;
       console.error('Error updating prompt:', err);
       setError(errorMsg);
+    } finally {
+      setOperationState({ type: null, promptId: null });
     }
   };
 
@@ -80,6 +87,7 @@ const PromptManager = ({ onPromptsUpdated }) => {
       return;
     }
 
+    setOperationState({ type: 'delete', promptId });
     try {
       await apiDeletePrompt(promptId, API_BASE_URL);
       await fetchPrompts();
@@ -87,12 +95,16 @@ const PromptManager = ({ onPromptsUpdated }) => {
     } catch (err) {
       setError('Kan prompt niet verwijderen');
       console.error('Error deleting prompt:', err);
+    } finally {
+      setOperationState({ type: null, promptId: null });
     }
   };
 
   const toggleActive = async (promptId, currentActive) => {
-    await handleUpdate(promptId, { is_active: !currentActive });
+    await handleUpdate(promptId, { is_active: !currentActive }, 'toggle');
   };
+
+  const isGlobalBusy = operationState.type === 'create';
 
   // Filter prompts based on search query
   const filteredPrompts = prompts.filter(prompt =>
@@ -113,10 +125,11 @@ const PromptManager = ({ onPromptsUpdated }) => {
           </div>
           <button
             onClick={() => setShowAddForm(!showAddForm)}
+            disabled={isGlobalBusy}
             className="dashboard-primary-btn px-4 py-2 transition flex items-center gap-2 text-sm"
           >
-            <Plus size={16} />
-            Nieuwe Prompt
+            {isGlobalBusy ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+            {isGlobalBusy ? 'Aanmaken...' : 'Nieuwe Prompt'}
           </button>
         </div>
       </div>
@@ -194,16 +207,18 @@ const PromptManager = ({ onPromptsUpdated }) => {
             <div className="flex gap-2">
               <button
                 onClick={handleCreate}
+                disabled={isGlobalBusy}
                 className="dashboard-primary-btn px-4 py-2 transition flex items-center gap-2 text-sm"
               >
-                <Check size={16} />
-                Opslaan
+                {isGlobalBusy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                {isGlobalBusy ? 'Opslaan...' : 'Opslaan'}
               </button>
               <button
                 onClick={() => {
                   setShowAddForm(false);
                   setFormData({ title: '', content: '', is_active: true, is_default: false });
                 }}
+                disabled={isGlobalBusy}
                 className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition flex items-center gap-2 text-sm"
               >
                 <X size={16} />
@@ -309,6 +324,7 @@ const PromptManager = ({ onPromptsUpdated }) => {
                         key={prompt.id}
                         prompt={prompt}
                         isEditing={editingId === prompt.id}
+                        operationState={operationState}
                         onEdit={() => setEditingId(prompt.id)}
                         onCancelEdit={() => setEditingId(null)}
                         onUpdate={handleUpdate}
@@ -326,7 +342,7 @@ const PromptManager = ({ onPromptsUpdated }) => {
   );
 };
 
-const PromptCard = ({ prompt, isEditing, onEdit, onCancelEdit, onUpdate, onDelete, onToggleActive }) => {
+const PromptCard = ({ prompt, isEditing, operationState, onEdit, onCancelEdit, onUpdate, onDelete, onToggleActive }) => {
   const [editData, setEditData] = useState({ 
     title: prompt.title, 
     content: prompt.content, 
@@ -334,6 +350,10 @@ const PromptCard = ({ prompt, isEditing, onEdit, onCancelEdit, onUpdate, onDelet
     is_default: prompt.is_default || false
   });
   const [isExpanded, setIsExpanded] = useState(false);
+  const isSaving = operationState.type === 'update' && operationState.promptId === prompt.id;
+  const isDeleting = operationState.type === 'delete' && operationState.promptId === prompt.id;
+  const isToggling = operationState.type === 'toggle' && operationState.promptId === prompt.id;
+  const isRowBusy = isSaving || isDeleting || isToggling;
 
   useEffect(() => {
     setEditData({ 
@@ -393,13 +413,15 @@ const PromptCard = ({ prompt, isEditing, onEdit, onCancelEdit, onUpdate, onDelet
           <div className="flex gap-2">
             <button
               onClick={handleSave}
+              disabled={isRowBusy}
               className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-1 text-sm"
             >
-              <Check size={14} />
-              Opslaan
+              {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              {isSaving ? 'Opslaan...' : 'Opslaan'}
             </button>
             <button
               onClick={onCancelEdit}
+              disabled={isRowBusy}
               className="px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition flex items-center gap-1 text-sm"
             >
               <X size={14} />
@@ -460,13 +482,16 @@ const PromptCard = ({ prompt, isEditing, onEdit, onCancelEdit, onUpdate, onDelet
                 console.log('Toggle button clicked!', prompt.id, prompt.is_active);
                 onToggleActive(prompt.id, prompt.is_active);
               }}
+              disabled={isRowBusy}
               className={`px-3 py-1.5 rounded-lg transition text-sm cursor-pointer ${
                 prompt.is_active
                   ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
                   : 'bg-green-100 text-green-700 hover:bg-green-200'
               }`}
             >
-              {prompt.is_active ? 'Deactiveren' : 'Activeren'}
+              {isToggling ? (
+                <span className="inline-flex items-center gap-1"><Loader2 size={14} className="animate-spin" />Bezig...</span>
+              ) : (prompt.is_active ? 'Deactiveren' : 'Activeren')}
             </button>
             <button
               type="button"
@@ -475,6 +500,7 @@ const PromptCard = ({ prompt, isEditing, onEdit, onCancelEdit, onUpdate, onDelet
                 console.log('Edit button clicked!', prompt.id);
                 onEdit();
               }}
+              disabled={isRowBusy}
               className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition cursor-pointer"
               title="Bewerken"
             >
@@ -487,10 +513,11 @@ const PromptCard = ({ prompt, isEditing, onEdit, onCancelEdit, onUpdate, onDelet
                 console.log('Delete button clicked!', prompt.id);
                 onDelete(prompt.id);
               }}
+              disabled={isRowBusy}
               className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition cursor-pointer"
               title="Verwijderen"
             >
-              <Trash2 size={16} />
+              {isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
             </button>
           </div>
         </div>

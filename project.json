@@ -6,14 +6,7 @@
     "dev-all": {
       "executor": "nx:run-commands",
       "options": {
-        "parallel": true,
-        "commands": [
-          "nx run mbo-chatbot-frontend:serve",
-          "nx run mbo-dashboard-frontend:serve",
-          "nx run api-gateway:serve",
-          "nx run database-manager:serve",
-          "nx run realtime-voice-service:serve"
-        ]
+        "command": "nx run-many --target=serve --projects=mbo-chatbot-frontend,mbo-dashboard-frontend,api-gateway,database-manager,realtime-voice-service --parallel=5 --outputStyle=stream"
       }
     },
     "stop-all": {

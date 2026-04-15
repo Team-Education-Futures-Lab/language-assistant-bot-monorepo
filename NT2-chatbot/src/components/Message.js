@@ -4,8 +4,15 @@ import AnimatedText from './AnimatedText';
 
 function Message({ message, isNew, onEdit, onDelete, conversationId, onAnimationDone }) {
   const isUser = message.role === 'user';
-  const normalizedContent = (message.content || '').trim().toLowerCase();
-  const showUserListeningAnimation = isUser && message.streamLive && (!normalizedContent || normalizedContent === 'luisteren...');
+  const normalizedContent = (message.content || '').trim();
+  const showUserStreamingIndicator = isUser && message.streamLive;
+  const shouldShowUserContent = normalizedContent && normalizedContent.toLowerCase() !== 'luisteren...';
+  const lowerContent = normalizedContent.toLowerCase();
+  const showAssistantGeneratingIndicator = !isUser && !message.isComplete && (
+    !normalizedContent ||
+    lowerContent === 'antwoord laden...' ||
+    lowerContent === 'antwoord genereren...'
+  );
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(message.content || '');
@@ -60,10 +67,10 @@ function Message({ message, isNew, onEdit, onDelete, conversationId, onAnimation
                     </div>
                   </div>
                 ) : (
-                  showUserListeningAnimation ? (
-                    <div className="voice-listening-message" aria-live="polite">
-                      <span className="voice-listening-message-bars" aria-hidden="true">
-                        <span />
+                  showUserStreamingIndicator ? (
+                    <div className="voice-streaming-indicator" aria-live="polite">
+                      {shouldShowUserContent ? <p>{message.content}</p> : null}
+                      <span className="voice-streaming-dots" aria-hidden="true">
                         <span />
                         <span />
                         <span />
@@ -78,7 +85,15 @@ function Message({ message, isNew, onEdit, onDelete, conversationId, onAnimation
               <div className="text-base leading-relaxed">
                 {message.reservedSpace ? (
                   <div className="overflow-visible p-3 bg-transparent rounded" style={{ minHeight: (message.reservedHeight || 300) + 'px' }}>
-                    {!message.isComplete && !message.streamLive ? (
+                    {showAssistantGeneratingIndicator ? (
+                      <div className="assistant-generating-indicator" aria-live="polite">
+                        <span className="voice-streaming-dots" aria-hidden="true">
+                          <span />
+                          <span />
+                          <span />
+                        </span>
+                      </div>
+                    ) : (!message.isComplete && !message.streamLive) ? (
                       <div className="w-full h-full" />
                     ) : (
                       <div className="whitespace-pre-wrap text-base leading-relaxed text-app-text-primary">
@@ -96,7 +111,15 @@ function Message({ message, isNew, onEdit, onDelete, conversationId, onAnimation
                     )}
                   </div>
                 ) : (
-                  message.isComplete && message.shouldAnimate ? (
+                  showAssistantGeneratingIndicator ? (
+                    <div className="assistant-generating-indicator" aria-live="polite">
+                      <span className="voice-streaming-dots" aria-hidden="true">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
+                    </div>
+                  ) : message.isComplete && message.shouldAnimate ? (
                     <AnimatedText
                       text={displayContent}
                       isComplete={message.isComplete}

@@ -12,6 +12,15 @@ const parseBooleanEnv = (value, defaultValue = false) => {
 
 const BARGE_IN_ENABLED = parseBooleanEnv(process.env.REACT_APP_VOICE_BARGE_IN, false);
 const RESPONSE_RESUME_COOLDOWN_MS = Number(process.env.REACT_APP_VOICE_RESUME_COOLDOWN_MS || 800);
+const VOICE_SPEED_MIN = 0.25;
+const VOICE_SPEED_MAX = 1.5;
+const DEFAULT_VOICE_SPEED = 1.0;
+
+const clampVoiceSpeed = (value) => {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return DEFAULT_VOICE_SPEED;
+  return Math.min(VOICE_SPEED_MAX, Math.max(VOICE_SPEED_MIN, numericValue));
+};
 
 const toBase64 = (uint8Array) => {
   let binary = '';
@@ -98,6 +107,7 @@ export default function useStreamingVoiceChat(callbacks = {}) {
   const wsFallbackInProgressRef = useRef(false);
   const responseHasAudioRef = useRef(false);
   const playbackDrainTimerRef = useRef(null);
+  const playbackSpeedRef = useRef(DEFAULT_VOICE_SPEED);
 
   const [statusText, setStatusText] = useState('');
   const [liveTranscript, setLiveTranscript] = useState('');
@@ -106,6 +116,7 @@ export default function useStreamingVoiceChat(callbacks = {}) {
   const [isRecording, setIsRecording] = useState(false);
   const [awaitingResponse, setAwaitingResponse] = useState(false);
   const [error, setError] = useState('');
+  const [playbackSpeed, setPlaybackSpeed] = useState(DEFAULT_VOICE_SPEED);
 
   useEffect(() => {
     callbacksRef.current = callbacks;
@@ -197,6 +208,17 @@ export default function useStreamingVoiceChat(callbacks = {}) {
     const socket = socketRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
     socket.send(JSON.stringify(payload));
+  };
+
+  const updatePlaybackSpeed = (nextSpeed) => {
+    const normalizedSpeed = clampVoiceSpeed(nextSpeed);
+    playbackSpeedRef.current = normalizedSpeed;
+    setPlaybackSpeed(normalizedSpeed);
+
+    sendJsonMessage({
+      type: 'session.update',
+      speed: normalizedSpeed,
+    });
   };
 
   const finalizeMicUnblockAfterPlayback = () => {
@@ -501,7 +523,10 @@ export default function useStreamingVoiceChat(callbacks = {}) {
         wsFallbackInProgressRef.current = false;
         setIsConnected(true);
         setStatusText('Realtime sessie starten...');
-        sendJsonMessage({ type: 'session.start' });
+        sendJsonMessage({
+          type: 'session.start',
+          speed: playbackSpeedRef.current,
+        });
       };
 
       socket.onmessage = handleSocketMessage;
@@ -585,5 +610,7 @@ export default function useStreamingVoiceChat(callbacks = {}) {
     statusText,
     liveTranscript,
     error,
+    playbackSpeed,
+    setPlaybackSpeed: updatePlaybackSpeed,
   };
 }

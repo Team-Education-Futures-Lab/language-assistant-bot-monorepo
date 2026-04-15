@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, FileUp, Search, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, FileUp, Search, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import {
   API_BASE_URL,
   createChunk as apiCreateChunk,
@@ -21,6 +21,7 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [deletingUpload, setDeletingUpload] = useState('');
   const [chunkSize, setChunkSize] = useState(500); // Default chunk size
+  const [operationState, setOperationState] = useState({ type: null, id: null });
   
   // Upload-level state
   const [expandedUploads, setExpandedUploads] = useState({});
@@ -64,6 +65,7 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
     }
 
     setLoading(true);
+    setOperationState({ type: 'create-chunk', id: null });
     try {
       await apiCreateChunk(subjectId, {
         content: formData.content,
@@ -78,6 +80,7 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
       setError(err.message);
     } finally {
       setLoading(false);
+      setOperationState({ type: null, id: null });
     }
   };
 
@@ -86,12 +89,15 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
       return;
     }
 
+    setOperationState({ type: 'delete-chunk', id: chunkId });
     try {
       await apiDeleteChunk(chunkId, API_BASE_URL);
       await fetchChunks();
       onChunksUpdated?.();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setOperationState({ type: null, id: null });
     }
   };
 
@@ -102,6 +108,7 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
 
     setError('');
     setDeletingUpload(uploadName);
+    setOperationState({ type: 'delete-upload', id: uploadName });
 
     try {
       await apiDeleteUpload(subjectId, uploadName, API_BASE_URL);
@@ -124,6 +131,7 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
       setError(err.message);
     } finally {
       setDeletingUpload('');
+      setOperationState({ type: null, id: null });
     }
   };
 
@@ -242,6 +250,7 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
 
     setError('');
     setLoading(true);
+    setOperationState({ type: 'upload-file', id: uploadFile?.name || null });
 
     try {
       await apiUploadSubjectFile(
@@ -261,8 +270,15 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
     } catch (err) {
       setError(err.message);
       setLoading(false);
+      setOperationState({ type: null, id: null });
     }
   };
+
+  useEffect(() => {
+    if (!loading && operationState.type === 'upload-file') {
+      setOperationState({ type: null, id: null });
+    }
+  }, [loading, operationState.type]);
 
   return (
     <div className="dashboard-card bg-white rounded-lg shadow-md p-6">
@@ -274,17 +290,19 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
         <div className="flex gap-2">
           <button
             onClick={() => setShowForm(!showForm)}
+            disabled={loading && operationState.type === 'create-chunk'}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
           >
-            <Plus size={18} />
-            Chunk Toevoegen
+            {loading && operationState.type === 'create-chunk' ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
+            {loading && operationState.type === 'create-chunk' ? 'Bezig...' : 'Chunk Toevoegen'}
           </button>
           <button
             onClick={() => setShowFileUpload(!showFileUpload)}
+            disabled={loading && operationState.type === 'upload-file'}
             className="dashboard-primary-btn flex items-center gap-2 px-4 py-2 transition"
           >
-            <FileUp size={18} />
-            Bestand Uploaden
+            {loading && operationState.type === 'upload-file' ? <Loader2 size={18} className="animate-spin" /> : <FileUp size={18} />}
+            {loading && operationState.type === 'upload-file' ? 'Upload bezig...' : 'Bestand Uploaden'}
           </button>
         </div>
       </div>
@@ -353,7 +371,8 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
                 disabled={!uploadFile || loading}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
               >
-                {loading ? 'Uploaden...' : 'Upload'}
+                {loading && operationState.type === 'upload-file' ? <Loader2 size={16} className="animate-spin" /> : null}
+                {loading && operationState.type === 'upload-file' ? 'Uploaden...' : 'Upload'}
               </button>
               <button
                 type="button"
@@ -407,7 +426,9 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
                 disabled={loading}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50"
               >
-                {loading ? 'Opslaan...' : 'Opslaan'}
+                {loading && operationState.type === 'create-chunk' ? (
+                  <span className="inline-flex items-center gap-2"><Loader2 size={16} className="animate-spin" />Opslaan...</span>
+                ) : 'Opslaan'}
               </button>
               <button
                 type="button"
@@ -556,7 +577,7 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
                         className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-red-700 bg-red-100 hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed transition flex-shrink-0"
                         title="Verwijder upload en alle bijbehorende chunks"
                       >
-                        <Trash2 size={14} />
+                        {deletingUpload === uploadName ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                         <span className="hidden sm:inline">{deletingUpload === uploadName ? 'Verwijderen...' : 'Verwijder upload'}</span>
                       </button>
                     </div>
@@ -618,10 +639,15 @@ const ChunkManager = ({ subjectId, onChunksUpdated }) => {
                               </div>
                               <button
                                 onClick={() => handleDeleteChunk(chunk.id)}
+                                disabled={operationState.type === 'delete-chunk' && operationState.id === chunk.id}
                                 className="p-1 hover:bg-red-50 rounded transition flex-shrink-0"
                                 title="Verwijder chunk"
                               >
-                                <Trash2 size={16} className="text-red-600" />
+                                {operationState.type === 'delete-chunk' && operationState.id === chunk.id ? (
+                                  <Loader2 size={16} className="text-red-600 animate-spin" />
+                                ) : (
+                                  <Trash2 size={16} className="text-red-600" />
+                                )}
                               </button>
                             </div>
                             <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap break-words">

@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Send, Mic } from 'lucide-react';
+import { Send, Mic, SlidersHorizontal } from 'lucide-react';
 
 const SHOW_TYPING_INPUT = false;
 
@@ -8,6 +8,8 @@ export default function ChatInput({
   disabled,
   onStartRecording,
   onEndSession,
+  playbackSpeed = 1,
+  onPlaybackSpeedChange,
   isRecording,
   isConnecting,
   isConnected,
@@ -44,6 +46,7 @@ export default function ChatInput({
   };
 
   const showEndButton = isConnected;
+  const speedLabel = `${Number(playbackSpeed || 1).toFixed(3)}x`;
 
   return (
     <div className="sticky bottom-0 px-4 py-5 bg-gradient-to-t from-white to-white/95 border-t border-transparent">
@@ -70,6 +73,35 @@ export default function ChatInput({
             {isRecording && <span className="mic-ring mic-ring-connected" />}
             <Mic size={18} />
           </button>
+
+          <div className="relative group/speed">
+            <button
+              type="button"
+              aria-label="Spreeksnelheid"
+              title={`Spreeksnelheid (${speedLabel})`}
+              className="p-2 border-none cursor-pointer rounded-full flex items-center justify-center transition-all duration-200 text-gray-500 hover:bg-gray-100 hover:text-app-text-primary"
+            >
+              <SlidersHorizontal size={18} />
+            </button>
+
+            <div className="absolute left-1/2 bottom-full -translate-x-1/2 opacity-0 scale-95 transition-all duration-150 group-hover/speed:opacity-100 group-hover/speed:scale-100">
+              <div className="w-16 rounded-xl border border-app-border bg-white shadow-lg px-2 py-3 flex flex-col items-center gap-2">
+                <span className="text-[11px] font-medium text-app-text-secondary">{speedLabel}</span>
+                <div className="h-28 w-8 flex items-center justify-center">
+                  <input
+                    id="voice-speed"
+                    type="range"
+                    min={0.25}
+                    max={1.5}
+                    step={0.001}
+                    value={playbackSpeed}
+                    onChange={(event) => onPlaybackSpeedChange?.(event.target.value)}
+                    className="h-24 w-24 -rotate-90 accent-app-accent cursor-pointer"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
 
           {showEndButton && (
             <button

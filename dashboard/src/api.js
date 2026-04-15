@@ -34,7 +34,9 @@ const fetchJson = async (path, options = {}, baseUrl) => {
 };
 
 export const fetchApiHealth = async (baseUrl) => {
-  const response = await fetch(buildApiUrl('/api/query/health', baseUrl));
+  // The detailed health endpoint can return 503 when a downstream service is slow.
+  // For dashboard boot, we only need to know if the gateway itself is reachable.
+  const response = await fetch(buildApiUrl('/api/query/health/gateway', baseUrl));
   return response.ok;
 };
 
