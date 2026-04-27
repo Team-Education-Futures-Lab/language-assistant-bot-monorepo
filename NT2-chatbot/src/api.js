@@ -39,6 +39,31 @@ const buildRealtimeWsUrl = (apiBaseUrl) => {
   }
 };
 
+const buildApiUrl = (path, apiBaseUrl = API_BASE_URL) => {
+  if (!apiBaseUrl) {
+    throw new Error('Chatbot API base URL is not configured. Set REACT_APP_API_BASE_URL.');
+  }
+
+  return `${apiBaseUrl.replace(/\/$/, '')}${path}`;
+};
+
+const fetchJson = async (path, options = {}, apiBaseUrl) => {
+  const response = await fetch(buildApiUrl(path, apiBaseUrl), options);
+
+  let data = {};
+  try {
+    data = await response.json();
+  } catch {
+    data = {};
+  }
+
+  if (!response.ok) {
+    throw new Error(data.message || `API-fout: ${response.status}`);
+  }
+
+  return data;
+};
+
 export const API_BASE_URL = configuredApiBaseUrl
   ? configuredApiBaseUrl.replace(/\/$/, '')
   : '';
@@ -46,6 +71,11 @@ export const API_BASE_URL = configuredApiBaseUrl
 export const STREAMING_VOICE_WS_URL =
   process.env.REACT_APP_STREAMING_VOICE_WS_URL ||
   (API_BASE_URL ? buildRealtimeWsUrl(API_BASE_URL) : '');
+
+export const fetchSubjects = async (baseUrl) => {
+  const data = await fetchJson('/api/query/subjects', {}, baseUrl);
+  return data.subjects || [];
+};
 
 const getUnavailableApiMessage = () => {
   if (!API_BASE_URL) {
@@ -56,7 +86,7 @@ const getUnavailableApiMessage = () => {
 };
 
 // Query the backend API with text - with streaming support
-export const queryBackendAPI = async (question, onChunk) => {
+export const queryBackendAPI = async (question, onChunk, options = {}) => {
   return { success: false, error: getUnavailableApiMessage() };
 };
 

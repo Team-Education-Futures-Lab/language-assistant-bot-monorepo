@@ -38,6 +38,16 @@ const PromptManager = ({ onPromptsUpdated }) => {
     }
   };
 
+  const deactivateOtherPrompts = async (activePromptId, promptList = prompts) => {
+    const promptsToDeactivate = (promptList || []).filter(
+      (prompt) => prompt.id !== activePromptId && prompt.is_active,
+    );
+
+    for (const prompt of promptsToDeactivate) {
+      await apiUpdatePrompt(prompt.id, { is_active: false }, API_BASE_URL);
+    }
+  };
+
   const handleCreate = async () => {
     if (!formData.title.trim() || !formData.content.trim()) {
       setError('Titel en inhoud zijn verplicht');
@@ -46,7 +56,17 @@ const PromptManager = ({ onPromptsUpdated }) => {
 
     setOperationState({ type: 'create', promptId: null });
     try {
-      await apiCreatePrompt(formData, API_BASE_URL);
+      const createResult = await apiCreatePrompt(formData, API_BASE_URL);
+
+      if (formData.is_active) {
+        const createdPromptId = createResult?.prompt?.id || createResult?.id;
+        const promptsAfterCreate = await apiFetchPrompts(API_BASE_URL);
+
+        if (createdPromptId) {
+          await deactivateOtherPrompts(createdPromptId, promptsAfterCreate);
+        }
+      }
+
       await fetchPrompts();
       setFormData({ title: '', content: '', is_active: true, is_default: false });
       setShowAddForm(false);
@@ -65,6 +85,11 @@ const PromptManager = ({ onPromptsUpdated }) => {
     try {
       console.log('Updating prompt:', promptId, updates);
       await apiUpdatePrompt(promptId, updates, API_BASE_URL);
+
+      if (updates?.is_active === true) {
+        await deactivateOtherPrompts(promptId);
+      }
+
       await fetchPrompts();
       setEditingId(null);
       if (onPromptsUpdated) onPromptsUpdated();
@@ -101,7 +126,8 @@ const PromptManager = ({ onPromptsUpdated }) => {
   };
 
   const toggleActive = async (promptId, currentActive) => {
-    await handleUpdate(promptId, { is_active: !currentActive }, 'toggle');
+    const nextActive = !currentActive;
+    await handleUpdate(promptId, { is_active: nextActive }, 'toggle');
   };
 
   const isGlobalBusy = operationState.type === 'create';
@@ -468,7 +494,8 @@ const PromptCard = ({ prompt, isEditing, operationState, onEdit, onCancelEdit, o
               </div>
               <p className="text-xs text-gray-500 mt-1 truncate">
                 {isExpanded ? 'Klik om in te klappen' : 'Klik om prompt te bekijken'} • 
-                Aangemaakt: {new Date(prompt.created_at).toLocaleDateString('nl-NL')}
+                Aangemaakt: {new Date(prompt.created_at).toLocaleDateString('nl-NL')} • 
+                Laatst bijgewerkt: {new Date(prompt.updated_at || prompt.created_at).toLocaleDateString('nl-NL')}
               </p>
             </div>
           </div>

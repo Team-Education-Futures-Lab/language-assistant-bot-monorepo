@@ -6,12 +6,42 @@ import ChatInput from './components/ChatInput';
 import EmptyState from './components/EmptyState';
 import SpeechPage from './components/SpeechPage';
 import LiveSpeechPage from './components/LiveSpeechPage';
-import { queryBackendAPI } from './api';
+import { fetchSubjects as apiFetchSubjects, queryBackendAPI } from './api';
 import useStreamingVoiceChat from './hooks/useStreamingVoiceChat';
+
+const SELECTED_SUBJECT_STORAGE_KEY = 'nt2ChatbotSelectedSubjectId';
+const SELECTED_LANGUAGE_LEVEL_STORAGE_KEY = 'nt2ChatbotSelectedLanguageLevel';
+const CEFR_LEVEL_OPTIONS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+
+const readStoredSelectedSubjectId = () => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const storedValue = window.localStorage.getItem(SELECTED_SUBJECT_STORAGE_KEY);
+  if (!storedValue) {
+    return null;
+  }
+
+  const parsedValue = Number(storedValue);
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : null;
+};
+
+const readStoredLanguageLevel = () => {
+  if (typeof window === 'undefined') {
+    return 'B1';
+  }
+
+  const storedValue = (window.localStorage.getItem(SELECTED_LANGUAGE_LEVEL_STORAGE_KEY) || '').toUpperCase();
+  return CEFR_LEVEL_OPTIONS.includes(storedValue) ? storedValue : 'B1';
+};
 
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [subjects, setSubjects] = useState([]);
+  const [selectedSubjectId, setSelectedSubjectId] = useState(() => readStoredSelectedSubjectId());
+  const [selectedLanguageLevel, setSelectedLanguageLevel] = useState(() => readStoredLanguageLevel());
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [activePage, setActivePage] = useState('chat');
@@ -34,6 +64,53 @@ function App() {
   useEffect(() => {
     activeConversationIdRef.current = activeConversationId;
   }, [activeConversationId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (selectedSubjectId) {
+      window.localStorage.setItem(SELECTED_SUBJECT_STORAGE_KEY, String(selectedSubjectId));
+    } else {
+      window.localStorage.removeItem(SELECTED_SUBJECT_STORAGE_KEY);
+    }
+  }, [selectedSubjectId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const normalizedLevel = (selectedLanguageLevel || '').toUpperCase();
+    if (CEFR_LEVEL_OPTIONS.includes(normalizedLevel)) {
+      window.localStorage.setItem(SELECTED_LANGUAGE_LEVEL_STORAGE_KEY, normalizedLevel);
+    } else {
+      window.localStorage.removeItem(SELECTED_LANGUAGE_LEVEL_STORAGE_KEY);
+    }
+  }, [selectedLanguageLevel]);
+
+  useEffect(() => {
+    const loadSubjects = async () => {
+      try {
+        const nextSubjects = await apiFetchSubjects();
+        setSubjects(nextSubjects);
+        setSelectedSubjectId((currentSubjectId) => {
+          if (!currentSubjectId) {
+            return null;
+          }
+
+          const subjectExists = nextSubjects.some((subject) => subject.id === currentSubjectId);
+          return subjectExists ? currentSubjectId : null;
+        });
+      } catch (error) {
+        console.error('Failed to load chatbot subjects:', error);
+        setSubjects([]);
+      }
+    };
+
+    loadSubjects();
+  }, []);
 
   const scrollToMessage = (messageId, block = 'start') => {
     setTimeout(() => {
@@ -169,6 +246,23 @@ function App() {
     }));
   };
 
+  const handleSubjectChange = (nextSubjectId) => {
+    if (nextSubjectId === null || nextSubjectId === undefined || nextSubjectId === '') {
+      setSelectedSubjectId(null);
+      return;
+    }
+
+    const parsedSubjectId = Number(nextSubjectId);
+    setSelectedSubjectId(Number.isFinite(parsedSubjectId) && parsedSubjectId > 0 ? parsedSubjectId : null);
+  };
+
+  const handleLanguageLevelChange = (nextLanguageLevel) => {
+    const normalizedLevel = String(nextLanguageLevel || '').toUpperCase();
+    setSelectedLanguageLevel(CEFR_LEVEL_OPTIONS.includes(normalizedLevel) ? normalizedLevel : 'B1');
+  };
+
+  const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId) || null;
+
   const streamingVoice = useStreamingVoiceChat({
     onSessionStarted: () => {
       ensureLiveVoiceConversation();
@@ -297,7 +391,7 @@ function App() {
       // Don't update state during streaming to avoid flickering - just ignore chunks
       const apiResult = await queryBackendAPI(content, () => {
         // Do nothing during streaming - we'll update state only when complete
-      });
+      }, { subjectId: selectedSubjectId });
 
       // Update state only once with the complete response
       if (apiResult.success) {
@@ -371,7 +465,7 @@ function App() {
     // Don't update state during streaming to avoid flickering - just ignore chunks
     const apiResult = await queryBackendAPI(content, () => {
       // Do nothing during streaming - we'll update state only when complete
-    });
+    }, { subjectId: selectedSubjectId });
 
     // Update state only once with the complete response
     if (apiResult.success) {
@@ -531,10 +625,17 @@ function App() {
             <ChatInput 
               onSend={handleSendMessage} 
               disabled={isGenerating || streamingVoice.isBusy}
-              onStartRecording={streamingVoice.startRecording}
+              onStartRecording={() => streamingVoice.startRecording(selectedSubjectId, selectedLanguageLevel)}
               onEndSession={streamingVoice.endSession}
               playbackSpeed={streamingVoice.playbackSpeed}
               onPlaybackSpeedChange={streamingVoice.setPlaybackSpeed}
+              subjects={subjects}
+              selectedSubjectId={selectedSubjectId}
+              selectedSubject={selectedSubject}
+              onSelectSubject={handleSubjectChange}
+              languageLevels={CEFR_LEVEL_OPTIONS}
+              selectedLanguageLevel={selectedLanguageLevel}
+              onSelectLanguageLevel={handleLanguageLevelChange}
               isRecording={streamingVoice.isRecording}
               isConnecting={streamingVoice.isConnecting}
               isConnected={streamingVoice.isConnected}

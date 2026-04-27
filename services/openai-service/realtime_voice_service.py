@@ -74,7 +74,13 @@ def _parse_allowed_gateway_origins():
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 OPENAI_REALTIME_MODEL_DEFAULT = os.getenv('OPENAI_REALTIME_MODEL', 'gpt-4o-mini-realtime-preview')
 OPENAI_REALTIME_TRANSCRIPTION_MODEL = os.getenv('OPENAI_REALTIME_TRANSCRIPTION_MODEL', 'whisper-1')
+OPENAI_REALTIME_TRANSCRIPTION_MODEL_LANGUAGE = (
+    os.getenv('OPENAI_REALTIME_LANGUAGE')
+    or os.getenv('OPENAI_REALTIME_TRANSCRIPTION_MODEL_LANGUAGE')
+    or 'en'
+).strip().lower()
 OPENAI_REALTIME_VOICE_DEFAULT = os.getenv('OPENAI_REALTIME_VOICE', 'marin')
+
 DEFAULT_OPENAI_REALTIME_SYSTEM_PROMPT = os.getenv(
     'DEFAULT_OPENAI_REALTIME_SYSTEM_PROMPT',
     (
@@ -112,6 +118,10 @@ OPENAI_WS_PING_INTERVAL_SEC = float(os.getenv('OPENAI_WS_PING_INTERVAL_SEC', 0))
 OPENAI_REALTIME_SPEED_MIN = 0.25
 OPENAI_REALTIME_SPEED_MAX = 1.5
 OPENAI_REALTIME_SPEED_DEFAULT = 1.0
+ALLOWED_CEFR_LEVELS = ('A1', 'A2', 'B1', 'B2', 'C1', 'C2')
+OPENAI_REALTIME_CEFR_LEVEL_DEFAULT = os.getenv('OPENAI_REALTIME_CEFR_LEVEL_DEFAULT', 'B1').strip().upper()
+if OPENAI_REALTIME_CEFR_LEVEL_DEFAULT not in ALLOWED_CEFR_LEVELS:
+    OPENAI_REALTIME_CEFR_LEVEL_DEFAULT = 'B1'
 PROMPTS_CACHE_TTL_SEC = float(os.getenv('PROMPTS_CACHE_TTL_SEC', '30'))
 RETRIEVE_LOG_FULL_PAYLOAD = _get_bool_env('RETRIEVE_LOG_FULL_PAYLOAD', default=False)
 
@@ -246,17 +256,19 @@ def build_openai_session_config(speed=OPENAI_REALTIME_SPEED_DEFAULT):
     openai_realtime_voice = get_openai_realtime_voice()
     normalized_speed = clamp_realtime_speed(speed)
     log.info(
-        '[OPENAI] Resolved runtime settings model=%s voice=%s speed=%.2f',
+        '[OPENAI] Resolved runtime settings model=%s voice=%s speed=%.2f transcription_language=%s',
         openai_realtime_model,
         openai_realtime_voice,
         normalized_speed,
+        OPENAI_REALTIME_TRANSCRIPTION_MODEL_LANGUAGE,
     )
     return {
         "type": "realtime",
         "audio": {
             "input": {
                 "transcription": {
-                    "model": OPENAI_REALTIME_TRANSCRIPTION_MODEL
+                    "model": OPENAI_REALTIME_TRANSCRIPTION_MODEL,
+                    "language": OPENAI_REALTIME_TRANSCRIPTION_MODEL_LANGUAGE
                 },
                 "turn_detection": {
                     "type": "server_vad",
@@ -278,7 +290,9 @@ def build_openai_session_config(speed=OPENAI_REALTIME_SPEED_DEFAULT):
 #     }
 
 
-def build_dutch_system_message() -> dict:
+def build_dutch_system_message(language_level: str | None = None) -> dict:
+    level_instruction = build_cefr_level_instruction(language_level)
+
     return {
         'type': 'conversation.item.create',
         'item': {
@@ -287,11 +301,22 @@ def build_dutch_system_message() -> dict:
             'content': [
                 {
                     'type': 'input_text',
-                    'text': get_effective_system_prompt(),
+                    'text': f"{get_effective_system_prompt()}\n\n{level_instruction}",
                 }
             ],
         },
     }
+
+
+def build_cefr_level_instruction(language_level: str | None = None) -> str:
+    normalized_level = str(language_level or OPENAI_REALTIME_CEFR_LEVEL_DEFAULT).strip().upper()
+    if normalized_level not in ALLOWED_CEFR_LEVELS:
+        normalized_level = OPENAI_REALTIME_CEFR_LEVEL_DEFAULT
+
+    return (
+        f'Pas je taalgebruik strikt aan op CEFR-niveau {normalized_level}. '
+        'Gebruik woordenschat, zinslengte en grammatica die bij dit niveau passen.'
+    )
 
 
 def extract_user_query_from_item(item: dict, state: dict, event: dict | None = None) -> str:
@@ -351,7 +376,7 @@ def extract_user_query_from_item(item: dict, state: dict, event: dict | None = N
     return buffered
 
 
-def retrieve_external_context(user_query: str) -> dict:
+def retrieve_external_context(user_query: str, subject_id: int | None = None) -> dict:
     if not user_query:
         return {'context_found': False, 'formatted_context': '', 'retrieved_items': [], 'sources': [], 'chunk_count': 0}
 
@@ -363,6 +388,7 @@ def retrieve_external_context(user_query: str) -> dict:
             f'{DATABASE_MANAGER_URL}/retrieve',
             json={
                 'question': user_query,
+                **({'subject_id': subject_id} if subject_id is not None else {}),
             },
             timeout=retrieve_timeout_sec,
         )
@@ -383,16 +409,20 @@ def retrieve_external_context(user_query: str) -> dict:
             log.warning('[RETRIEVE] Database manager /retrieve returned non-success payload')
             return {'context_found': False, 'formatted_context': '', 'retrieved_items': [], 'sources': [], 'chunk_count': 0}
 
-        log.info(
-            '[RETRIEVE] Database manager response context_found=%s chunk_count=%s sources=%s',
-            payload.get('context_found'),
-            payload.get('chunk_count', 0),
-            payload.get('sources', []),
-        )
+        retrieved_items = payload.get('retrieved_items', []) or []
+        pretty_summary = {
+            'context_found': bool(payload.get('context_found')),
+            'mode': payload.get('mode', 'unknown'),
+            'subject_id': payload.get('subject_id'),
+            'k': payload.get('k'),
+            'retrieved_items': len(retrieved_items),
+            'sources': payload.get('sources', []) or [],
+        }
+        log.info('[RETRIEVE] Summary:\n%s', json.dumps(pretty_summary, ensure_ascii=False, indent=2))
         return {
             'context_found': bool(payload.get('context_found')),
             'formatted_context': payload.get('formatted_context', '') or '',
-            'retrieved_items': payload.get('retrieved_items', []) or [],
+            'retrieved_items': retrieved_items,
             'sources': payload.get('sources', []) or [],
             'chunk_count': int(payload.get('chunk_count', 0) or 0),
         }
@@ -401,9 +431,15 @@ def retrieve_external_context(user_query: str) -> dict:
         return {'context_found': False, 'formatted_context': '', 'retrieved_items': [], 'sources': [], 'chunk_count': 0}
 
 
-def build_retrieval_system_message(formatted_context: str, sources: list[str], retrieved_items: list[dict] | None = None) -> dict:
+def build_retrieval_system_message(
+    formatted_context: str,
+    sources: list[str],
+    retrieved_items: list[dict] | None = None,
+    language_level: str | None = None,
+) -> dict:
     source_text = ', '.join(sources) if sources else 'onbekende bron'
     system_prompt = get_effective_system_prompt()
+    level_instruction = build_cefr_level_instruction(language_level)
 
     if not formatted_context and retrieved_items:
         # Fallback only: database-manager should normally provide formatted_context.
@@ -416,6 +452,7 @@ def build_retrieval_system_message(formatted_context: str, sources: list[str], r
     # Merge default NT2 system prompt with retrieved context
     merged_text = (
         f"{system_prompt}\n\n"
+        f"{level_instruction}\n\n"
         f"Gebruik de onderstaande context als primaire bron voor je antwoord. "
         f"Als informatie ontbreekt, zeg dat expliciet.\n"
         f"Bronnen: {source_text}.\n\n"
@@ -520,6 +557,8 @@ def build_session_state(browser_ws):
         'openai_ws': None,
         'openai_send_lock': threading.Lock(),
         'closed': False,
+        'subject_id': None,
+        'language_level': OPENAI_REALTIME_CEFR_LEVEL_DEFAULT,
         'transcript_buffers': {},      # user speech transcripts keyed by item_id
         'assistant_text_buffer': '',   # accumulated assistant text for current response
         'current_response_id': None,
@@ -631,7 +670,7 @@ def openai_listener(state: dict):
 
                 if transcript:
                     log.info('[RETRIEVE] Triggering retrieval from transcription.completed for item_id=%s', item_id)
-                    retrieval = retrieve_external_context(transcript)
+                    retrieval = retrieve_external_context(transcript, state.get('subject_id'))
                     state['last_retrieval_query'] = transcript
                     if retrieval.get('context_found') and retrieval.get('formatted_context'):
                         state['last_retrieval_used'] = True
@@ -644,6 +683,7 @@ def openai_listener(state: dict):
                                 retrieval['formatted_context'],
                                 retrieval.get('sources', []),
                                 retrieval.get('retrieved_items', []),
+                                state.get('language_level'),
                             ),
                         )
                         log.info(
@@ -807,6 +847,7 @@ route_context = {
     'SERVICE_HOST': SERVICE_HOST,
     'SERVICE_PORT': SERVICE_PORT,
     'OPENAI_REALTIME_SPEED_DEFAULT': OPENAI_REALTIME_SPEED_DEFAULT,
+    'ALLOWED_CEFR_LEVELS': ALLOWED_CEFR_LEVELS,
     'log': log,
     'clamp_realtime_speed': clamp_realtime_speed,
     'build_openai_session_config': build_openai_session_config,

@@ -16,6 +16,7 @@ def register_ws_routes(sock, context):
     send_openai = context['send_openai']
     send_browser = context['send_browser']
     close_state = context['close_state']
+    allowed_cefr_levels = context['ALLOWED_CEFR_LEVELS']
 
     @sock.route('/ws/realtime-voice')
     def realtime_voice_socket(ws):
@@ -35,12 +36,39 @@ def register_ws_routes(sock, context):
                 if message_type == 'session.start':
                     log.info('[SESSION] session.start received from browser')
                     requested_speed = clamp_realtime_speed(payload.get('speed', openai_realtime_speed_default))
+                    requested_subject_id = payload.get('subject_id')
+                    requested_language_level = payload.get('language_level')
+                    if requested_subject_id in (None, ''):
+                        state['subject_id'] = None
+                    else:
+                        try:
+                            state['subject_id'] = int(requested_subject_id)
+                        except (TypeError, ValueError):
+                            send_browser(ws, {'type': 'error', 'message': 'subject_id must be a valid integer'})
+                            continue
+
+                    if requested_language_level not in (None, ''):
+                        normalized_language_level = str(requested_language_level).upper()
+                        if normalized_language_level not in allowed_cefr_levels:
+                            send_browser(
+                                ws,
+                                {
+                                    'type': 'error',
+                                    'message': f'language_level must be one of: {", ".join(allowed_cefr_levels)}',
+                                },
+                            )
+                            continue
+                        state['language_level'] = normalized_language_level
+
                     state['playback_speed'] = requested_speed
                     session_config = build_openai_session_config(speed=requested_speed)
                     state['openai_ws'] = connect_to_openai(session_config)
                     state['openai_ping_thread'] = maybe_start_openai_keepalive(state)
-                    send_openai(state, build_dutch_system_message())
-                    log.info('[SESSION] Dutch system instruction injected into conversation context')
+                    send_openai(state, build_dutch_system_message(state.get('language_level')))
+                    log.info(
+                        '[SESSION] Dutch system instruction injected into conversation context (level=%s)',
+                        state.get('language_level'),
+                    )
                     threading.Thread(target=openai_listener, args=(state,), daemon=True).start()
                     log.info('[SESSION] Listener thread started, sending session.started to browser')
                     send_browser(

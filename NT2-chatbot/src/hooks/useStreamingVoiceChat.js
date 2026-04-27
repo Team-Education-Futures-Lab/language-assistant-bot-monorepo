@@ -459,7 +459,7 @@ export default function useStreamingVoiceChat(callbacks = {}) {
     }
   };
 
-  const startRecording = async () => {
+  const startRecording = async (subjectId = null, languageLevel = null) => {
     if (socketRef.current || isConnecting || isRecording) return;
 
     cleanupAll();
@@ -523,10 +523,25 @@ export default function useStreamingVoiceChat(callbacks = {}) {
         wsFallbackInProgressRef.current = false;
         setIsConnected(true);
         setStatusText('Realtime sessie starten...');
-        sendJsonMessage({
+        const sessionStartMessage = {
           type: 'session.start',
           speed: playbackSpeedRef.current,
-        });
+        };
+
+        const normalizedSubjectId = subjectId === null || subjectId === undefined || subjectId === ''
+          ? null
+          : Number(subjectId);
+
+        if (Number.isFinite(normalizedSubjectId) && normalizedSubjectId > 0) {
+          sessionStartMessage.subject_id = normalizedSubjectId;
+        }
+
+        const normalizedLanguageLevel = String(languageLevel || '').toUpperCase();
+        if (normalizedLanguageLevel) {
+          sessionStartMessage.language_level = normalizedLanguageLevel;
+        }
+
+        sendJsonMessage(sessionStartMessage);
       };
 
       socket.onmessage = handleSocketMessage;

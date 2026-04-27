@@ -1,3 +1,4 @@
+import json
 import os
 from flask import request, jsonify
 
@@ -13,6 +14,7 @@ def register_retrieval_routes(app, context):
     rank_chunk_records = context['rank_chunk_records']
     format_docs_for_llm = context['format_docs_for_llm']
     format_chunk_records_for_llm = context['format_chunk_records_for_llm']
+    get_log = context['get_log']
 
     @app.route('/retrieve', methods=['POST'])
     def retrieve_context():
@@ -34,8 +36,10 @@ def register_retrieval_routes(app, context):
                 }), 400
 
             runtime_retrieve_top_k = default_retrieve_top_k
+            log = get_log()
 
             selected_subject_id = data.get('subject_id', data.get('subjectId'))
+            subject_filter = None
             if selected_subject_id is not None and selected_subject_id != '':
                 try:
                     selected_subject_id = int(selected_subject_id)
@@ -46,9 +50,8 @@ def register_retrieval_routes(app, context):
                     }), 400
 
                 try:
-                    # Subject retrieval_k takes precedence over request k.
-                    # Retrieval scope itself remains global for now.
                     k = get_subject_retrieval_k(selected_subject_id, runtime_retrieve_top_k)
+                    subject_filter = {'subject_id': selected_subject_id}
                 except ValueError as error:
                     return jsonify({
                         'status': 'error',
@@ -62,6 +65,36 @@ def register_retrieval_routes(app, context):
                 if k > 20:
                     k = 20
 
+            def _filter_chunks_by_subject(chunks: list[dict]) -> list[dict]:
+                if subject_filter is None:
+                    return chunks
+
+                filtered_chunks = []
+                for chunk in chunks:
+                    try:
+                        chunk_subject_id = int(chunk.get('subject_id'))
+                    except (TypeError, ValueError):
+                        continue
+
+                    if chunk_subject_id == selected_subject_id:
+                        filtered_chunks.append(chunk)
+                return filtered_chunks
+
+            def _log_retrieve_summary(payload: dict):
+                summary = {
+                    'context_found': bool(payload.get('context_found')),
+                    'mode': payload.get('mode'),
+                    'subject_id': payload.get('subject_id'),
+                    'k': payload.get('k'),
+                    'retrieved_items': len(payload.get('retrieved_items', []) or []),
+                    'sources': payload.get('sources', []),
+                }
+                log.info('[RETRIEVE] Summary:\n%s', json.dumps(summary, ensure_ascii=False, indent=2))
+
+            def _success(payload: dict):
+                _log_retrieve_summary(payload)
+                return jsonify(payload), 200
+
             retrieval_mode = 'vector'
             retrieved_items = []
 
@@ -71,9 +104,13 @@ def register_retrieval_routes(app, context):
 
             if vector_db_connected and vector_db is not None:
                 try:
-                    results = vector_db.similarity_search(user_query, k=k)
+                    search_kwargs = {'k': k}
+                    if subject_filter is not None:
+                        search_kwargs['filter'] = subject_filter
+
+                    results = vector_db.similarity_search(user_query, **search_kwargs)
                     if not results:
-                        return jsonify({
+                        return _success({
                             'status': 'success',
                             'question': user_query,
                             'context_found': False,
@@ -85,7 +122,7 @@ def register_retrieval_routes(app, context):
                             'mode': retrieval_mode,
                             'subject_id': selected_subject_id,
                             'k': k,
-                        }), 200
+                        })
 
                     sources = []
                     for doc in results:
@@ -106,10 +143,11 @@ def register_retrieval_routes(app, context):
                 except Exception:
                     retrieval_mode = 'fallback'
                     all_chunks = get_fallback_chunks_cached()
+                    all_chunks = _filter_chunks_by_subject(all_chunks)
                     ranked_chunks = rank_chunk_records(user_query, all_chunks, k)
 
                     if not ranked_chunks:
-                        return jsonify({
+                        return _success({
                             'status': 'success',
                             'question': user_query,
                             'context_found': False,
@@ -121,7 +159,7 @@ def register_retrieval_routes(app, context):
                             'mode': retrieval_mode,
                             'subject_id': selected_subject_id,
                             'k': k,
-                        }), 200
+                        })
 
                     sources = []
                     for chunk in ranked_chunks:
@@ -135,10 +173,11 @@ def register_retrieval_routes(app, context):
             else:
                 retrieval_mode = 'fallback'
                 all_chunks = get_fallback_chunks_cached()
+                all_chunks = _filter_chunks_by_subject(all_chunks)
                 ranked_chunks = rank_chunk_records(user_query, all_chunks, k)
 
                 if not ranked_chunks:
-                    return jsonify({
+                    return _success({
                         'status': 'success',
                         'question': user_query,
                         'context_found': False,
@@ -150,7 +189,7 @@ def register_retrieval_routes(app, context):
                         'mode': retrieval_mode,
                         'subject_id': selected_subject_id,
                         'k': k,
-                    }), 200
+                    })
 
                 sources = []
                 for chunk in ranked_chunks:
@@ -162,7 +201,7 @@ def register_retrieval_routes(app, context):
                 chunk_count = len(ranked_chunks)
                 retrieved_items = ranked_chunks
 
-            return jsonify({
+            return _success({
                 'status': 'success',
                 'question': user_query,
                 'context_found': True,
@@ -174,7 +213,7 @@ def register_retrieval_routes(app, context):
                 'mode': retrieval_mode,
                 'subject_id': selected_subject_id,
                 'k': k,
-            }), 200
+            })
         except Exception as error:
             return jsonify({
                 'status': 'error',
