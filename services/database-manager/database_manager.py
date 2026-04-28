@@ -8,8 +8,7 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from supabase import create_client, Client
-from langchain_huggingface import HuggingFaceEmbeddings
+from modules.openai_embeddings import OpenAIEmbeddings
 from langchain_postgres import PGVector
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
@@ -19,7 +18,8 @@ import time
 import logging
 from datetime import datetime, timezone
 from typing import Any
-from modules.mariadb_adapter import MariaDBAdapter, MARIADB_ADAPTER_AVAILABLE
+from modules.database_factory import DatabaseFactory
+from modules.database_provider import DatabaseProvider
 from modules.text_processing import (
     allowed_file,
     chunk_text,
@@ -68,13 +68,13 @@ def _parse_allowed_gateway_origins():
             unique_origins.append(origin)
     return unique_origins
 
-# --- Supabase Configuration ---
+# --- Supabase Configuration (kept for backward compatibility) ---
 DB_BACKEND = os.getenv('DB_BACKEND', 'supabase').strip().lower()
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 OPENAI_SETTINGS_TABLE = os.getenv('OPENAI_SETTINGS_TABLE', 'openai_settings')
 
-# --- MariaDB Configuration ---
+# --- MariaDB Configuration (kept for backward compatibility) ---
 MARIADB_URL = os.getenv('MARIADB_URL', '').strip()
 MARIADB_HOST = os.getenv('MARIADB_HOST', 'localhost').strip()
 MARIADB_PORT = int(os.getenv('MARIADB_PORT', '3306'))
@@ -90,6 +90,7 @@ DB_PORT = os.getenv('DB_PORT', "5432")
 DB_NAME = os.getenv('DB_NAME', "school-db")
 COLLECTION_NAME = os.getenv('COLLECTION_NAME', "course_materials_vectors")
 CONNECTION_STRING = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+OPENAI_EMBEDDING_MODEL = os.getenv('OPENAI_EMBEDDING_MODEL', 'text-embedding-3-small')
 
 _retrieve_top_k_env = os.getenv('RETRIEVE_TOP_K', os.getenv('DEFAULT_RETRIEVE_TOP_K', '10'))
 try:
@@ -148,7 +149,7 @@ log = logging.getLogger('database_manager')
 
 
 # Initialize database client
-supabase: Any = None
+db: DatabaseProvider = None
 db_connected = False
 vector_db = None
 vector_db_connected = False
@@ -157,7 +158,7 @@ _fallback_chunks_cache_expires_at = 0.0
 
 
 def get_fallback_chunks_cached():
-    """Fetch fallback retrieval chunks with a short TTL cache to reduce Supabase roundtrips."""
+    """Fetch fallback retrieval chunks with a short TTL cache to reduce database roundtrips."""
     global _fallback_chunks_cache_data, _fallback_chunks_cache_expires_at
 
     now = time.time()
@@ -168,7 +169,7 @@ def get_fallback_chunks_cached():
     ):
         return _fallback_chunks_cache_data
 
-    all_chunks_data = supabase.table('chunks').select('content,source_file,subject_id').execute()
+    all_chunks_data = db.table('chunks').select('content,source_file,subject_id').execute()
     chunks = all_chunks_data.data or []
 
     if FALLBACK_CHUNKS_CACHE_TTL_SEC > 0:
@@ -180,49 +181,35 @@ def get_fallback_chunks_cached():
 
     return chunks
 
+
 def init_database_client():
-    """Initialize configured database backend client."""
-    global supabase, db_connected
+    """Initialize configured database backend using factory pattern."""
+    global db, db_connected
     try:
-        if DB_BACKEND == 'mariadb':
-            if not MARIADB_ADAPTER_AVAILABLE:
-                raise RuntimeError('MariaDB backend requires sqlalchemy and pymysql packages')
-
-            if MARIADB_URL:
-                connection_url = MARIADB_URL
-            else:
-                if not (MARIADB_USER and MARIADB_DATABASE):
-                    raise RuntimeError('Set MARIADB_URL or MARIADB_USER/MARIADB_PASSWORD/MARIADB_DATABASE')
-                connection_url = (
-                    f"mysql+pymysql://{MARIADB_USER}:{MARIADB_PASSWORD}"
-                    f"@{MARIADB_HOST}:{MARIADB_PORT}/{MARIADB_DATABASE}"
-                )
-
-            supabase = MariaDBAdapter(connection_url)
-            supabase.ping()
-            print('✓ MariaDB client initialized successfully')
+        db = DatabaseFactory.create_provider(backend=DB_BACKEND)
+        if db.connect():
+            db_connected = True
+            print(f'✓ {DB_BACKEND.capitalize()} database client initialized successfully')
+            return True
         else:
-            supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-            print('✓ Supabase client initialized successfully')
-
-        db_connected = True
-        return True
+            db_connected = False
+            return False
     except Exception as e:
         print(f"✗ Error initializing database backend ({DB_BACKEND}): {str(e)}")
         db_connected = False
         return False
 
 
-def init_supabase():
-    """Backward-compatible wrapper."""
-    return init_database_client()
+def get_supabase():
+    """Backward-compatible wrapper returning the database provider."""
+    return db
 
 
 def init_vector_db():
     """Initialize PGVector connection for semantic retrieval."""
     global vector_db, vector_db_connected
     try:
-        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        embeddings = OpenAIEmbeddings(model_name=OPENAI_EMBEDDING_MODEL)
         vector_db = PGVector.from_existing_index(
             embedding=embeddings,
             collection_name=COLLECTION_NAME,
@@ -240,7 +227,7 @@ def init_vector_db():
 def get_runtime_setting_value(key, default_value, value_type=str):
     """Read a runtime setting from the DB with env fallback."""
     try:
-        data = supabase.table(OPENAI_SETTINGS_TABLE).select('value').eq('key', key).execute()
+        data = db.table(OPENAI_SETTINGS_TABLE).select('value').eq('key', key).execute()
         if not data.data:
             return default_value
 
@@ -297,7 +284,7 @@ route_context = {
     'get_runtime_setting_value': get_runtime_setting_value,
     'get_subject_retrieval_k': get_subject_retrieval_k,
     'get_fallback_chunks_cached': get_fallback_chunks_cached,
-    'get_supabase': lambda: supabase,
+    'get_supabase': lambda: db,
     'get_vector_db': lambda: vector_db,
     'get_vector_db_connected': lambda: vector_db_connected,
     'get_db_connected': lambda: db_connected,

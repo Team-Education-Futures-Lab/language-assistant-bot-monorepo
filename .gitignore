@@ -63,6 +63,16 @@ deploy/env/*.env
 **/.venv/
 **/venv/
 
+# Diagnostic and testing scripts
+**/test_vector_search.py
+**/test_vector_search2.py
+**/test_filter.py
+**/check_state.py
+**/check_collection.py
+**/check_embeddings.py
+**/backfill_embeddings.py
+**/backfill_new_chunks.py
+
 # Node artifacts
 **/node_modules/
 **/build/

@@ -108,8 +108,12 @@ def register_retrieval_routes(app, context):
                     if subject_filter is not None:
                         search_kwargs['filter'] = subject_filter
 
+                    log.info('[VECTOR SEARCH] Query: "%s" | k=%d | filter=%s', user_query, k, search_kwargs.get('filter'))
                     results = vector_db.similarity_search(user_query, **search_kwargs)
+                    log.info('[VECTOR SEARCH] Found %d results', len(results))
+                    
                     if not results:
+                        log.warning('[VECTOR SEARCH] No results found for query')
                         return _success({
                             'status': 'success',
                             'question': user_query,
@@ -130,6 +134,11 @@ def register_retrieval_routes(app, context):
                         if source_filename not in sources:
                             sources.append(source_filename)
 
+                    # Log retrieved content preview
+                    for idx, doc in enumerate(results[:3], 1):  # Preview first 3
+                        preview = (doc.page_content or '')[:80].replace('\n', ' ')
+                        log.info('[VECTOR SEARCH] Result %d: %s... [metadata=%s]', idx, preview, doc.metadata)
+
                     formatted_context = format_docs_for_llm(results)
                     chunk_count = len(results)
                     retrieved_items = [
@@ -140,13 +149,16 @@ def register_retrieval_routes(app, context):
                         }
                         for doc in results
                     ]
-                except Exception:
+                except Exception as vec_error:
+                    log.warning('[VECTOR SEARCH] Falling back to lexical search: %s', str(vec_error))
                     retrieval_mode = 'fallback'
                     all_chunks = get_fallback_chunks_cached()
                     all_chunks = _filter_chunks_by_subject(all_chunks)
                     ranked_chunks = rank_chunk_records(user_query, all_chunks, k)
+                    log.info('[FALLBACK SEARCH] Found %d ranked chunks', len(ranked_chunks))
 
                     if not ranked_chunks:
+                        log.warning('[FALLBACK SEARCH] No chunks found')
                         return _success({
                             'status': 'success',
                             'question': user_query,
@@ -200,6 +212,12 @@ def register_retrieval_routes(app, context):
                 formatted_context = format_chunk_records_for_llm(ranked_chunks)
                 chunk_count = len(ranked_chunks)
                 retrieved_items = ranked_chunks
+
+            # Log the full context being sent to LLM
+            log.info('[RETRIEVAL COMPLETE] Sending to LLM:')
+            log.info('[RETRIEVAL CONTEXT] Question: %s', user_query)
+            log.info('[RETRIEVAL CONTEXT] Mode: %s | Chunks: %d | Sources: %s', retrieval_mode, chunk_count, sources)
+            log.info('[RETRIEVAL CONTEXT] Full context preview (first 300 chars):\n%s', formatted_context[:300] if formatted_context else '(empty)')
 
             return _success({
                 'status': 'success',

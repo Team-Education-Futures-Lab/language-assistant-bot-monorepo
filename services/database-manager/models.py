@@ -42,7 +42,7 @@ class Chunk(db.Model):
     subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id', ondelete='CASCADE'), nullable=False, index=True)
     content = db.Column(db.Text, nullable=False)
     source_file = db.Column(db.String(255))
-    embedding = db.Column(Vector(384), nullable=True)  # all-MiniLM-L6-v2 dimension
+    embedding = db.Column(Vector(1536), nullable=True)  # OpenAI embedding dimension (text-embedding-3-small)
     chunk_metadata = db.Column(db.JSON)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

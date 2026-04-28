@@ -1,5 +1,10 @@
 import os
 from datetime import datetime
+import os
+import json
+import uuid
+import psycopg2
+from modules.openai_embeddings import OpenAIEmbeddings
 from flask import request, jsonify
 from werkzeug.utils import secure_filename
 
@@ -75,7 +80,80 @@ def register_chunk_upload_routes(app, context):
                 }
                 chunk_records.append(chunk_record)
 
+            # Try to compute OpenAI embeddings for each chunk and include them in the record.
+            openai_model = os.getenv('OPENAI_EMBEDDING_MODEL', 'text-embedding-3-small')
+            try:
+                embedder = OpenAIEmbeddings(model_name=openai_model)
+                texts = [r['content'] for r in chunk_records]
+                embeddings = embedder.embed_documents(texts)
+                for i, vec in enumerate(embeddings):
+                    # pgvector-compatible list of floats
+                    chunk_records[i]['embedding'] = vec
+            except Exception as e:
+                # Log embedding errors so they're visible in service logs
+                try:
+                    log = get_log()
+                    log.exception('Failed to compute embeddings for uploaded file: %s', str(e))
+                except Exception:
+                    print('[ERROR] Failed to compute embeddings:', str(e))
+
             supabase.table('chunks').insert(chunk_records).execute()
+            
+            # Also populate langchain_pg_embedding for PGVector similarity search
+            pgvec_inserted = 0
+            try:
+                collection_name = os.getenv('COLLECTION_NAME', 'course_materials_vectors')
+                db_conn = psycopg2.connect(
+                    host=os.getenv('DB_HOST'),
+                    port=os.getenv('DB_PORT'),
+                    database=os.getenv('DB_NAME'),
+                    user=os.getenv('DB_USER'),
+                    password=os.getenv('DB_PASSWORD')
+                )
+                db_cur = db_conn.cursor()
+                
+                # Get collection ID
+                db_cur.execute("SELECT uuid FROM langchain_pg_collection WHERE name = %s;", (collection_name,))
+                collection_row = db_cur.fetchone()
+                if collection_row:
+                    collection_id = collection_row[0]
+                    
+                    # Insert embeddings for each chunk
+                    for chunk_record in chunk_records:
+                        if 'embedding' in chunk_record and chunk_record['embedding']:
+                            embedding_id = str(uuid.uuid4())
+                            cmetadata = {
+                                'subject_id': subject_id,
+                                'source_file': chunk_record['source_file'],
+                                'chunk_index': chunk_record['chunk_metadata'].get('chunk_index'),
+                            }
+                            
+                            db_cur.execute("""
+                                INSERT INTO langchain_pg_embedding (id, collection_id, embedding, document, cmetadata)
+                                VALUES (%s, %s, %s, %s, %s)
+                                ON CONFLICT (id) DO NOTHING
+                            """, (
+                                embedding_id,
+                                collection_id,
+                                chunk_record['embedding'],
+                                chunk_record['content'],
+                                json.dumps(cmetadata)
+                            ))
+                            pgvec_inserted += 1
+                else:
+                    raise Exception(f"Collection '{collection_name}' not found in langchain_pg_collection")
+                
+                db_conn.commit()
+                db_cur.close()
+                db_conn.close()
+                print(f"[INFO] Inserted {pgvec_inserted} embeddings into langchain_pg_embedding")
+            except Exception as e:
+                try:
+                    log = get_log()
+                    log.error('[PGVEC] Failed to populate langchain_pg_embedding: %s (attempted %d inserts)', str(e), pgvec_inserted)
+                except Exception:
+                    print(f'[ERROR] Failed to populate PGVector embeddings: {str(e)} (attempted {pgvec_inserted} inserts)')
+            
             return jsonify({
                 'status': 'success',
                 'message': f'Bestand geüpload en {len(chunks)} chunks aangemaakt',
