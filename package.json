@@ -13,6 +13,7 @@
     "test:integration:api-gateway": "python -m pytest services/api-gateway/tests/integration -q",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
+    "test:voice-latency": "node tests/voice-latency.js",
     "test:backend": "npm run test:unit:database-manager && npm run test:unit:openai-service && npm run test:integration:api-gateway",
     "test:all": "npm run test:backend && npm run test:e2e",
     "test": "echo \"Error: no test specified\" && exit 1"
