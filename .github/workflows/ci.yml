@@ -58,8 +58,9 @@ jobs:
         run: npm ci --prefix dashboard
 
       - name: Install Playwright browsers
-        run: npm --prefix dashboard exec -- npx playwright install --with-deps
+        working-directory: dashboard
+        run: npx playwright install --with-deps
 
       - name: Run Playwright dashboard e2e tests
         working-directory: dashboard
-        run: npm exec -- npx playwright test tests/e2e --config=../playwright.config.js --reporter=dot
+        run: npx playwright test tests/e2e --config=../playwright.config.js --reporter=dot
