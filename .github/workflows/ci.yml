@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  tests:
+    name: Run tests (Python + Playwright)
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install Python test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+          if [ -f services/api-gateway/requirements.txt ]; then pip install -r services/api-gateway/requirements.txt; fi
+          if [ -f services/database-manager/requirements.txt ]; then pip install -r services/database-manager/requirements.txt; fi
+          if [ -f services/openai-service/requirements.txt ]; then pip install -r services/openai-service/requirements.txt; fi
+
+      - name: Run Python unit and integration tests
+        run: |
+          pytest -q services/database-manager/tests/unit
+          pytest -q services/openai-service/tests/unit
+          pytest -q services/api-gateway/tests/integration
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Cache dashboard node_modules
+        uses: actions/cache@v4
+        with:
+          path: dashboard/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('dashboard/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dashboard dependencies
+        run: npm ci --prefix dashboard
+
+      - name: Install Playwright browsers
+        run: npm --prefix dashboard exec -- npx playwright install --with-deps
+
+      - name: Run Playwright dashboard e2e tests
+        working-directory: dashboard
+        run: npm exec -- npx playwright test tests/e2e --config=../playwright.config.js --reporter=dot

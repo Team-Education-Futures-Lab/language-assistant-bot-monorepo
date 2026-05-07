@@ -29,6 +29,15 @@ deploy/env/*.env
 !/services/openai-service/**
 !/deploy/**
 
+# Allow GitHub Actions workflows and Playwright config so CI files are tracked
+!/.github/
+!/.github/**
+!/playwright.config.js
+
+# Allow any top-level tests/ folder (if present)
+!/tests/
+!/tests/**
+
 # Explicitly ignore directories you requested to exclude
 /chat_app/
 /school_chatbot_test/
