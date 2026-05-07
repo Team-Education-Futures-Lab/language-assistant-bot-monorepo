@@ -1,6 +1,7 @@
 import os
 import re
 from pypdf import PdfReader
+from io import BytesIO
 
 
 def allowed_file(filename, allowed_extensions):
@@ -70,6 +71,45 @@ def extract_text_from_file(filepath):
         return None
     except Exception as error:
         print(f"[ERROR] Error extracting text from {filepath}: {error}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def extract_text_from_bytes(file_bytes: bytes, filename: str):
+    """Extract text from file content provided as bytes and filename (detects extension)."""
+    try:
+        if not filename or '.' not in filename:
+            return None
+        ext = filename.rsplit('.', 1)[1].lower()
+
+        if ext == 'txt':
+            try:
+                text = file_bytes.decode('utf-8', errors='ignore')
+            except Exception:
+                text = file_bytes.decode('latin-1', errors='ignore')
+            return sanitize_text(text)
+
+        if ext == 'pdf':
+            bio = BytesIO(file_bytes)
+            reader = PdfReader(bio)
+            pages_text = []
+            for page in reader.pages:
+                page_text = page.extract_text() or ''
+                if page_text:
+                    pages_text.append(page_text)
+            return sanitize_text('\n\n'.join(pages_text))
+
+        if ext == 'docx':
+            # Not supported without python-docx; return None so callers can handle gracefully
+            return None
+
+        if ext == 'doc':
+            return None
+
+        return None
+    except Exception as error:
+        print(f"[ERROR] Error extracting text from bytes for {filename}: {error}")
         import traceback
         traceback.print_exc()
         return None

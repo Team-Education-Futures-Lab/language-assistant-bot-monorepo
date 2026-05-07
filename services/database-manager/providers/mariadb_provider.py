@@ -1,4 +1,6 @@
+from typing import Any, Dict
 import json
+import os
 
 try:
     from sqlalchemy import create_engine, MetaData, Table, text
@@ -6,7 +8,6 @@ try:
     from sqlalchemy import update as sa_update
     from sqlalchemy import delete as sa_delete
     from sqlalchemy.dialects.mysql import insert as mysql_insert
-    MARIADB_ADAPTER_AVAILABLE = True
 except Exception:
     create_engine = None
     MetaData = None
@@ -16,7 +17,8 @@ except Exception:
     sa_update = None
     sa_delete = None
     mysql_insert = None
-    MARIADB_ADAPTER_AVAILABLE = False
+import uuid
+import psycopg2
 
 
 class _QueryResult:
@@ -198,9 +200,24 @@ class _MariaQuery:
         return _QueryResult([])
 
 
-class MariaDBAdapter:
-    def __init__(self, connection_url):
-        self.engine = create_engine(connection_url, pool_pre_ping=True)
+class MariaDBProvider:
+    def __init__(self, config: Dict[str, str]):
+        if create_engine is None:
+            raise RuntimeError('MariaDB provider requires SQLAlchemy and pymysql')
+
+        # Accept either MARIADB_URL or components
+        url = config.get('MARIADB_URL') or os.getenv('MARIADB_URL')
+        if not url:
+            host = config.get('MARIADB_HOST') or os.getenv('MARIADB_HOST', 'localhost')
+            port = config.get('MARIADB_PORT') or os.getenv('MARIADB_PORT', '3306')
+            user = config.get('MARIADB_USER') or os.getenv('MARIADB_USER')
+            password = config.get('MARIADB_PASSWORD') or os.getenv('MARIADB_PASSWORD')
+            database = config.get('MARIADB_DATABASE') or os.getenv('MARIADB_DATABASE')
+            if not (user and database):
+                raise RuntimeError('MARIADB_URL or MARIADB_USER/MARIADB_DATABASE must be set for MariaDBProvider')
+            url = f"mysql+pymysql://{user}:{password}@{host}:{port}/{database}"
+
+        self.engine = create_engine(url, pool_pre_ping=True)
         self.metadata = MetaData()
         self.table_cache = {}
 
@@ -208,10 +225,10 @@ class MariaDBAdapter:
         with self.engine.connect() as conn:
             conn.execute(text('SELECT 1'))
 
-    def table(self, table_name):
+    def table(self, table_name: str) -> Any:
         return _MariaQuery(self, table_name)
 
-    def get_table(self, table_name):
+    def get_table(self, table_name: str):
         if table_name not in self.table_cache:
             self.table_cache[table_name] = Table(table_name, self.metadata, autoload_with=self.engine)
         return self.table_cache[table_name]
@@ -222,3 +239,64 @@ class MariaDBAdapter:
         if not primary_keys:
             return None
         return primary_keys[0].name
+
+    def populate_langchain_embeddings(self, collection_name: str, chunk_records: list, subject_id: int) -> int:
+        """Insert chunk embeddings into langchain_pg_embedding for PGVector usage (Postgres-backed index).
+
+        This writes directly to the Postgres `langchain_pg_*` tables (PGVector). It uses the
+        runtime Postgres connection configured via environment variables so the vector index
+        can live in Postgres while the primary DB backend is MariaDB.
+        """
+        inserted = 0
+        try:
+            db_conn = psycopg2.connect(
+                host=os.getenv('DB_HOST'),
+                port=os.getenv('DB_PORT'),
+                database=os.getenv('DB_NAME'),
+                user=os.getenv('DB_USER'),
+                password=os.getenv('DB_PASSWORD')
+            )
+            db_cur = db_conn.cursor()
+
+            db_cur.execute("SELECT uuid FROM langchain_pg_collection WHERE name = %s;", (collection_name,))
+            collection_row = db_cur.fetchone()
+            if not collection_row:
+                raise RuntimeError(f"Collection '{collection_name}' not found in langchain_pg_collection")
+            collection_id = collection_row[0]
+
+            for chunk_record in chunk_records:
+                if 'embedding' in chunk_record and chunk_record['embedding']:
+                    embedding_id = str(uuid.uuid4())
+                    cmetadata = {
+                        'subject_id': subject_id,
+                        'source_file': chunk_record.get('source_file'),
+                        'chunk_index': chunk_record.get('chunk_metadata', {}).get('chunk_index'),
+                    }
+                    db_cur.execute(
+                        """
+                        INSERT INTO langchain_pg_embedding (id, collection_id, embedding, document, cmetadata)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (id) DO NOTHING
+                        """,
+                        (
+                            embedding_id,
+                            collection_id,
+                            chunk_record['embedding'],
+                            chunk_record['content'],
+                            json.dumps(cmetadata)
+                        )
+                    )
+                    inserted += 1
+
+            db_conn.commit()
+            db_cur.close()
+            db_conn.close()
+            return inserted
+        except Exception:
+            try:
+                if 'db_conn' in locals():
+                    db_conn.rollback()
+                    db_conn.close()
+            except Exception:
+                pass
+            raise

@@ -8,6 +8,13 @@
     "dev-all": "nx run workspace:dev-all",
     "stop-all": "nx run workspace:stop-all",
     "graph": "nx graph",
+    "test:unit:database-manager": "python -m pytest services/database-manager/tests/unit -q",
+    "test:unit:openai-service": "python -m pytest services/openai-service/tests/unit -q",
+    "test:integration:api-gateway": "python -m pytest services/api-gateway/tests/integration -q",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:backend": "npm run test:unit:database-manager && npm run test:unit:openai-service && npm run test:integration:api-gateway",
+    "test:all": "npm run test:backend && npm run test:e2e",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -15,6 +22,7 @@
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
+    "@playwright/test": "^1.54.2",
     "cross-env": "^10.1.0",
     "nx": "^22.6.3"
   },

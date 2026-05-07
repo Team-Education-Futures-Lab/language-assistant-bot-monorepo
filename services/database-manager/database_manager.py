@@ -8,23 +8,24 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from supabase import Client
 from modules.openai_embeddings import OpenAIEmbeddings
 from langchain_postgres import PGVector
 from werkzeug.middleware.proxy_fix import ProxyFix
-from werkzeug.utils import secure_filename
+ 
 from dotenv import load_dotenv
 import os
 import time
 import logging
 from datetime import datetime, timezone
 from typing import Any
-from modules.database_factory import DatabaseFactory
-from modules.database_provider import DatabaseProvider
+from controllers.db_controller import DBController
 from modules.text_processing import (
     allowed_file,
     chunk_text,
     sanitize_text,
     extract_text_from_file,
+    extract_text_from_bytes,
     rank_chunk_records,
     format_docs_for_llm,
     format_chunk_records_for_llm,
@@ -68,13 +69,13 @@ def _parse_allowed_gateway_origins():
             unique_origins.append(origin)
     return unique_origins
 
-# --- Supabase Configuration (kept for backward compatibility) ---
+# --- Supabase Configuration ---
 DB_BACKEND = os.getenv('DB_BACKEND', 'supabase').strip().lower()
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 OPENAI_SETTINGS_TABLE = os.getenv('OPENAI_SETTINGS_TABLE', 'openai_settings')
 
-# --- MariaDB Configuration (kept for backward compatibility) ---
+# --- MariaDB Configuration ---
 MARIADB_URL = os.getenv('MARIADB_URL', '').strip()
 MARIADB_HOST = os.getenv('MARIADB_HOST', 'localhost').strip()
 MARIADB_PORT = int(os.getenv('MARIADB_PORT', '3306'))
@@ -105,14 +106,9 @@ if DEFAULT_RETRIEVE_TOP_K > 20:
 DEFAULT_RETRIEVE_TIMEOUT_SEC = float(os.getenv('DEFAULT_RETRIEVE_TIMEOUT_SEC', 8))
 FALLBACK_CHUNKS_CACHE_TTL_SEC = int(os.getenv('FALLBACK_CHUNKS_CACHE_TTL_SEC', '20'))
 
-# Upload configuration - use absolute path
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_FOLDER = os.path.join(SCRIPT_DIR, 'uploads')
+# Upload configuration - we process uploads in-memory; no local uploads folder required
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'docx', 'doc'}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
-
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -149,7 +145,7 @@ log = logging.getLogger('database_manager')
 
 
 # Initialize database client
-db: DatabaseProvider = None
+supabase: Any = None  # will hold DBController instance (keeps backward compatibility)
 db_connected = False
 vector_db = None
 vector_db_connected = False
@@ -158,7 +154,7 @@ _fallback_chunks_cache_expires_at = 0.0
 
 
 def get_fallback_chunks_cached():
-    """Fetch fallback retrieval chunks with a short TTL cache to reduce database roundtrips."""
+    """Fetch fallback retrieval chunks with a short TTL cache to reduce Supabase roundtrips."""
     global _fallback_chunks_cache_data, _fallback_chunks_cache_expires_at
 
     now = time.time()
@@ -169,7 +165,7 @@ def get_fallback_chunks_cached():
     ):
         return _fallback_chunks_cache_data
 
-    all_chunks_data = db.table('chunks').select('content,source_file,subject_id').execute()
+    all_chunks_data = supabase.table('chunks').select('content,source_file,subject_id').execute()
     chunks = all_chunks_data.data or []
 
     if FALLBACK_CHUNKS_CACHE_TTL_SEC > 0:
@@ -181,28 +177,40 @@ def get_fallback_chunks_cached():
 
     return chunks
 
-
 def init_database_client():
-    """Initialize configured database backend using factory pattern."""
-    global db, db_connected
+    """Initialize configured database backend client."""
+    global supabase, db_connected
     try:
-        db = DatabaseFactory.create_provider(backend=DB_BACKEND)
-        if db.connect():
-            db_connected = True
-            print(f'✓ {DB_BACKEND.capitalize()} database client initialized successfully')
-            return True
-        else:
-            db_connected = False
-            return False
+        # Build minimal config dict for providers
+        config = {
+            'SUPABASE_URL': SUPABASE_URL,
+            'SUPABASE_KEY': SUPABASE_KEY,
+            'MARIADB_URL': MARIADB_URL,
+            'MARIADB_HOST': MARIADB_HOST,
+            'MARIADB_PORT': MARIADB_PORT,
+            'MARIADB_USER': MARIADB_USER,
+            'MARIADB_PASSWORD': MARIADB_PASSWORD,
+            'MARIADB_DATABASE': MARIADB_DATABASE,
+        }
+
+        # Initialize DBController which will pick the correct provider
+        controller = DBController(DB_BACKEND, config)
+        # provider readiness check
+        controller.ping()
+        supabase = controller
+        print(f"✓ {DB_BACKEND.capitalize()} client initialized successfully via DBController")
+
+        db_connected = True
+        return True
     except Exception as e:
         print(f"✗ Error initializing database backend ({DB_BACKEND}): {str(e)}")
         db_connected = False
         return False
 
 
-def get_supabase():
-    """Backward-compatible wrapper returning the database provider."""
-    return db
+def init_supabase():
+    """Backward-compatible wrapper."""
+    return init_database_client()
 
 
 def init_vector_db():
@@ -227,7 +235,7 @@ def init_vector_db():
 def get_runtime_setting_value(key, default_value, value_type=str):
     """Read a runtime setting from the DB with env fallback."""
     try:
-        data = db.table(OPENAI_SETTINGS_TABLE).select('value').eq('key', key).execute()
+        data = supabase.table(OPENAI_SETTINGS_TABLE).select('value').eq('key', key).execute()
         if not data.data:
             return default_value
 
@@ -271,11 +279,12 @@ route_context = {
     'SERVICE_PORT': SERVICE_PORT,
     'DEFAULT_RETRIEVE_TOP_K': DEFAULT_RETRIEVE_TOP_K,
     'OPENAI_SETTINGS_TABLE': OPENAI_SETTINGS_TABLE,
-    'UPLOAD_FOLDER': UPLOAD_FOLDER,
+    
     'ALLOWED_EXTENSIONS': ALLOWED_EXTENSIONS,
     'MAX_FILE_SIZE': MAX_FILE_SIZE,
     'allowed_file': allowed_file,
     'extract_text_from_file': extract_text_from_file,
+    'extract_text_from_bytes': extract_text_from_bytes,
     'sanitize_text': sanitize_text,
     'chunk_text': chunk_text,
     'rank_chunk_records': rank_chunk_records,
@@ -284,7 +293,7 @@ route_context = {
     'get_runtime_setting_value': get_runtime_setting_value,
     'get_subject_retrieval_k': get_subject_retrieval_k,
     'get_fallback_chunks_cached': get_fallback_chunks_cached,
-    'get_supabase': lambda: db,
+    'get_supabase': lambda: supabase,
     'get_vector_db': lambda: vector_db,
     'get_vector_db_connected': lambda: vector_db_connected,
     'get_db_connected': lambda: db_connected,
@@ -314,7 +323,7 @@ if __name__ == '__main__':
         print(f"Database backend: MariaDB ({mariadb_target})")
     else:
         print(f"Database backend: Supabase ({SUPABASE_URL})")
-    print(f"Upload folder: {UPLOAD_FOLDER}")
+    print("Uploads processed in-memory; no local uploads folder used")
     print(f"\nEnvironment:")
     print(f"  - APP_ENV:            {APP_ENV}")
     print(f"  - DB_BACKEND:         {DB_BACKEND}")

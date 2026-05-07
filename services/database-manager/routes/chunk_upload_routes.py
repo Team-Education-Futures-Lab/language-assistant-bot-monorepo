@@ -3,7 +3,6 @@ from datetime import datetime
 import os
 import json
 import uuid
-import psycopg2
 from modules.openai_embeddings import OpenAIEmbeddings
 from flask import request, jsonify
 from werkzeug.utils import secure_filename
@@ -12,11 +11,11 @@ from werkzeug.utils import secure_filename
 def register_chunk_upload_routes(app, context):
     get_supabase = context['get_supabase']
     get_log = context['get_log']
-    upload_folder = context['UPLOAD_FOLDER']
     allowed_extensions = context['ALLOWED_EXTENSIONS']
     max_file_size = context['MAX_FILE_SIZE']
     allowed_file = context['allowed_file']
     extract_text_from_file = context['extract_text_from_file']
+    extract_text_from_bytes = context.get('extract_text_from_bytes')
     sanitize_text = context['sanitize_text']
     chunk_text = context['chunk_text']
 
@@ -46,12 +45,19 @@ def register_chunk_upload_routes(app, context):
 
             file.seek(0)
             filename = secure_filename(file.filename)
-            unique_filename = f"{datetime.utcnow().timestamp()}_{filename}"
-            filepath = os.path.join(upload_folder, unique_filename)
-            file.save(filepath)
-            print(f"[DEBUG] File saved to: {filepath}")
+            file_bytes = file.read()
 
-            text = extract_text_from_file(filepath)
+            # Prefer in-memory extractor when available
+            if extract_text_from_bytes:
+                text = extract_text_from_bytes(file_bytes, filename)
+            else:
+                # Fallback: write to disk temporarily and use existing extractor
+                unique_filename = f"{datetime.utcnow().timestamp()}_{filename}"
+                filepath = os.path.join('.', unique_filename)
+                with open(filepath, 'wb') as fh:
+                    fh.write(file_bytes)
+                print(f"[DEBUG] File saved to temporary: {filepath}")
+                text = extract_text_from_file(filepath)
             if not text:
                 return jsonify({'status': 'error', 'message': 'Kon geen text uit bestand extraheren'}), 400
 
@@ -99,60 +105,17 @@ def register_chunk_upload_routes(app, context):
 
             supabase.table('chunks').insert(chunk_records).execute()
             
-            # Also populate langchain_pg_embedding for PGVector similarity search
-            pgvec_inserted = 0
+            # Delegate PGVector/langchain insertion to the provider
             try:
                 collection_name = os.getenv('COLLECTION_NAME', 'course_materials_vectors')
-                db_conn = psycopg2.connect(
-                    host=os.getenv('DB_HOST'),
-                    port=os.getenv('DB_PORT'),
-                    database=os.getenv('DB_NAME'),
-                    user=os.getenv('DB_USER'),
-                    password=os.getenv('DB_PASSWORD')
-                )
-                db_cur = db_conn.cursor()
-                
-                # Get collection ID
-                db_cur.execute("SELECT uuid FROM langchain_pg_collection WHERE name = %s;", (collection_name,))
-                collection_row = db_cur.fetchone()
-                if collection_row:
-                    collection_id = collection_row[0]
-                    
-                    # Insert embeddings for each chunk
-                    for chunk_record in chunk_records:
-                        if 'embedding' in chunk_record and chunk_record['embedding']:
-                            embedding_id = str(uuid.uuid4())
-                            cmetadata = {
-                                'subject_id': subject_id,
-                                'source_file': chunk_record['source_file'],
-                                'chunk_index': chunk_record['chunk_metadata'].get('chunk_index'),
-                            }
-                            
-                            db_cur.execute("""
-                                INSERT INTO langchain_pg_embedding (id, collection_id, embedding, document, cmetadata)
-                                VALUES (%s, %s, %s, %s, %s)
-                                ON CONFLICT (id) DO NOTHING
-                            """, (
-                                embedding_id,
-                                collection_id,
-                                chunk_record['embedding'],
-                                chunk_record['content'],
-                                json.dumps(cmetadata)
-                            ))
-                            pgvec_inserted += 1
-                else:
-                    raise Exception(f"Collection '{collection_name}' not found in langchain_pg_collection")
-                
-                db_conn.commit()
-                db_cur.close()
-                db_conn.close()
+                pgvec_inserted = supabase.populate_langchain_embeddings(collection_name, chunk_records, subject_id)
                 print(f"[INFO] Inserted {pgvec_inserted} embeddings into langchain_pg_embedding")
             except Exception as e:
                 try:
                     log = get_log()
-                    log.error('[PGVEC] Failed to populate langchain_pg_embedding: %s (attempted %d inserts)', str(e), pgvec_inserted)
+                    log.error('[PGVEC] Failed to populate langchain_pg_embedding: %s', str(e))
                 except Exception:
-                    print(f'[ERROR] Failed to populate PGVector embeddings: {str(e)} (attempted {pgvec_inserted} inserts)')
+                    print(f'[ERROR] Failed to populate PGVector embeddings: {str(e)}')
             
             return jsonify({
                 'status': 'success',
@@ -163,11 +126,12 @@ def register_chunk_upload_routes(app, context):
         except Exception as error:
             return jsonify({'status': 'error', 'message': f'Fout bij uploaden bestand: {str(error)}'}), 500
         finally:
-            if filepath and os.path.exists(filepath):
-                try:
+            # Remove temporary file if fallback path was used
+            try:
+                if filepath and os.path.exists(filepath):
                     os.remove(filepath)
-                except Exception:
-                    pass
+            except Exception:
+                pass
 
     @app.route('/subjects/<int:subject_id>/uploads/<path:upload_name>', methods=['DELETE'])
     def delete_upload(subject_id, upload_name):
